@@ -902,4 +902,49 @@ func Test_queryMIndex(t *testing.T) {
 		return nil
 	})
 
+	//add a new tag for ps[1]
+	bdb.Update(func(tx *bolt.Tx) error {
+		p, _ := NewPoler(tx)
+		ps[1].Tags = append(ps[1].Tags, "xyz")
+		k.Put(p, &ps[1])
+		return nil
+	})
+
+	qi = QueryInfo{
+		IndexName: "midx_Level_Tags",
+		Where: map[string][]byte{
+			//"Type": []byte("book"),
+			"Tags": []byte("xyz"),
+			//"District": []byte("West ST"),
+		},
+	}
+	bdb.View(func(tx *bolt.Tx) error {
+		p, _ := NewPoler(tx)
+		r, err := k.Query(p, qi)
+		cmpResult(r, err, map[uint64]Book{ps[0].ID: ps[0], ps[1].ID: ps[1], ps[2].ID: ps[2]})
+		return nil
+	})
+
+	//change tags of ps[2], remove "xyz"
+	bdb.Update(func(tx *bolt.Tx) error {
+		p, _ := NewPoler(tx)
+		ps[2].Tags = []string{"c", "CC"}
+		k.Put(p, &ps[2])
+		return nil
+	})
+
+	qi = QueryInfo{
+		IndexName: "midx_Level_Tags",
+		Where: map[string][]byte{
+			//"Type": []byte("book"),
+			"Tags": []byte("xyz"),
+			//"District": []byte("West ST"),
+		},
+	}
+	bdb.View(func(tx *bolt.Tx) error {
+		p, _ := NewPoler(tx)
+		r, err := k.Query(p, qi)
+		cmpResult(r, err, map[uint64]Book{ps[0].ID: ps[0], ps[1].ID: ps[1]})
+		return nil
+	})
 }
