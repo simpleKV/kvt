@@ -61,12 +61,12 @@ type IndexInfo struct {
 }
 
 type Index struct {
-	IndexInfo
+	*IndexInfo
 	Key IndexFunc //generate index bucket's key, value is the pk
 }
 
 type MIndex struct {
-	IndexInfo
+	*IndexInfo
 	Key MIndexFunc //generate index multi key, value is the pk
 }
 
@@ -107,8 +107,8 @@ func splitPath(fullPath string) (string, []string, error) {
 	}
 }
 
-func makeIndexInfo(name string, fields, path []string) IndexInfo {
-	idx := IndexInfo{
+func makeIndexInfo(name string, fields, path []string) *IndexInfo {
+	idx := &IndexInfo{
 		Name: name,
 	}
 	idx.Fields = append(idx.Fields, fields...)
@@ -188,7 +188,7 @@ func (kvt *KVT) saveIndexs(kp *KVTParam) error {
 }
 
 // if without fields need split fields from index name, excluding the inde prefix
-func checkIndexFields(index IndexInfo, allFields map[string]struct{}) error {
+func checkIndexFields(index *IndexInfo, allFields map[string]struct{}) error {
 	if len(index.Fields) == 0 {
 		return fmt.Errorf(errIndexFieldMismatch, index.Name)
 	}

@@ -61,13 +61,13 @@ type cmpValueInfo struct {
 }
 
 type cmpQueryInfo struct {
-	IndexName string
-	Where     map[string][]cmpValueInfo //(fieldName, value)
+	*IndexInfo
+	Where map[string][]cmpValueInfo //(fieldName, value)
 }
 
-func (kvt *KVT) assignFieldsName(indexName string, fieldValues [][]byte) (result map[string][]byte) {
+func (kvt *KVT) assignFieldsName(partial cmpQueryInfo, fieldValues [][]byte) (result map[string][]byte) {
 
-	idx := kvt.indexs[indexName]
+	idx := partial.IndexInfo
 	result = make(map[string][]byte, len(idx.Fields))
 
 	for i := range idx.Fields {
@@ -84,10 +84,10 @@ func (kvt *KVT) comparePartialQueryInfo(partial cmpQueryInfo, index []byte) bool
 
 	keys := SplitIndexKey(index)
 	//index keys will append a PK at end, so it should large than index's fields
-	if len(keys) != len(kvt.indexs[partial.IndexName].Fields)+1 {
+	if len(keys) != len(partial.IndexInfo.Fields)+1 {
 		return false
 	}
-	result := kvt.assignFieldsName(partial.IndexName, keys)
+	result := kvt.assignFieldsName(partial, keys)
 
 	for k, v := range partial.Where {
 		for i := range v {
@@ -107,13 +107,13 @@ func (kvt *KVT) getIndexInfo(name string) (index *IndexInfo, err error) {
 		if !ok {
 			return nil, fmt.Errorf(errIndexNotExist, name)
 		}
-		return &v.IndexInfo, nil
+		return v.IndexInfo, nil
 	case strings.HasPrefix(name, MIDXPrefix):
 		v, ok := kvt.mindexs[name]
 		if !ok {
 			return nil, fmt.Errorf(errIndexNotExist, name)
 		}
-		return &v.IndexInfo, nil
+		return v.IndexInfo, nil
 		//case strings.HasPrefix(name, PKPrefix): //how about query with pk ??
 	}
 	return nil, fmt.Errorf(errIndexNotExist, name)
@@ -157,7 +157,10 @@ func (kvt *KVT) RangeQuery(db Poler, rangeInfo RangeInfo) (result []any, err err
 
 	prefix := make([]byte, 0)
 	i := 0
-	partialQueryInfo := cmpQueryInfo{IndexName: rangeInfo.IndexName, Where: make(map[string][]cmpValueInfo, len(index.Fields))}
+	partialQueryInfo := cmpQueryInfo{
+		IndexInfo: index,
+		Where:     make(map[string][]cmpValueInfo, len(index.Fields)),
+	}
 	partial := false
 	for i = range index.Fields {
 		name := index.Fields[i]
@@ -197,6 +200,7 @@ func (kvt *KVT) RangeQuery(db Poler, rangeInfo RangeInfo) (result []any, err err
 
 	for i := range pks {
 		v, err := db.Get(pks[i].Value, kvt.path)
+
 		if err != nil {
 			return result, err
 		}
