@@ -18,6 +18,11 @@ KVT has lots of features:
 10. support spec data/index bucket path
 11. most import, very easy to use and integrate with other code
 
+install:
+```
+go get -tags bbolt https://github.com/simpleKV/kvt
+```
+
 here is a simple sample:
 ```
 package kvt_test
@@ -26,7 +31,7 @@ import (
 	"bytes"
 	"encoding/gob"
 	"fmt"
-	"kvt/kvt"
+	"github.com/simpleKV/kvt"
 	"log"
 	"unsafe"
 
