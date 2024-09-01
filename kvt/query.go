@@ -227,30 +227,16 @@ func (kvt *KVT) Query(db Poler, info QueryInfo) (result []any, err error) {
 	return kvt.RangeQuery(db, rangeInfo)
 }
 
-// simple query all data
-func (kvt *KVT) QueryAll(db Poler) (result []any, err error) {
-	pks, err := db.Query([]byte{}, func([]byte) bool { return true }, kvt.path) //query (key, pk) pair
-	if err != nil {
-		return result, err
-	}
-
-	for i := range pks {
-		obj, _ := kvt.unmarshal(pks[i].Value, nil)
-		result = append(result, obj)
-	}
-	return result, nil
-}
-
 // get a full obj with its pk only
-func (kvt *KVT) Get(db Poler, obj any) (old any, err error) {
+func (kvt *KVT) Get(db Poler, obj any, dst any) (any, error) {
 
 	key, _ := kvt.pk.Key(obj)
 	oldByte, err := db.Get(key, kvt.path)
 
 	if err == nil || len(oldByte) == 0 {
-		return
+		return dst, nil
 	}
-	return kvt.unmarshal(oldByte, obj)
+	return kvt.unmarshal(oldByte, dst)
 }
 
 // get all objs with prefixs/key bytes
