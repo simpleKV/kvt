@@ -161,13 +161,13 @@ func Save(order Order) {
 func Delete(order Order) {
 	bdb.Update(func(tx *bolt.Tx) error {
 		p, _ := kvt.NewPoler(tx)
-		kvOrder.Delete(p, &Order)
+		kvOrder.Delete(p, &order)
 		return nil
 	})
 }
 
 func Query() {
-	var orders []Order
+	var orders []*Order
 	var begin, end uint16 = 2, 4
 
 	//where order.Type="fruit" and 2 <= order.Status and order.Status < 4
