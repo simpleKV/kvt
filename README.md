@@ -23,7 +23,7 @@ KVT has lots of features:
 
 install:
 ```
-go get -tags bolt https://github.com/simpleKV/kvt
+go get -tags bolt github.com/simpleKV/kvt
 ```
 
 here is a simple sample:
