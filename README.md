@@ -1,9 +1,12 @@
-KVT is a pure GO index managment system for KV bucket objects
+KVT is a pure GO index manager lib for indexing key-value based objects
 
-define an index with some funcs with a struct and its object bucket,  
-KVT will auto maintain the index when you CRUD it
+define index with some funcs and a struct, KVT will auto maintain the index when you CRUD it
 
-the most important is you can query with KVT by the index you define.  
+the most important is you can query with KVT by the index you define, just as sqlite or other database system do for you
+
+KVT is NOT a KV system, it's a index manager only, it is aim to integrate with all other db based KV 
+
+Now support KV lists:  boltDB, ...
 
 KVT has lots of features:
 1. support union index, one field or multi fields
@@ -20,7 +23,7 @@ KVT has lots of features:
 
 install:
 ```
-go get -tags bbolt https://github.com/simpleKV/kvt
+go get -tags bolt https://github.com/simpleKV/kvt
 ```
 
 here is a simple sample:
