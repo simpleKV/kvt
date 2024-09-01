@@ -1,8 +1,9 @@
-KVT is a pure GO index managment system for KV bucket objects,  
+KVT is a pure GO index managment system for KV bucket objects
 
-you can define a index with some funcs with a struct and its object bucket,  when you CRUD it,   KVT will auto maintain the index 
+define an index with some funcs with a struct and its object bucket,  
+KVT will auto maintain the index when you CRUD it
 
-the most important is you can query with KVT from the index you define.  
+the most important is you can query with KVT by the index you define.  
 
 KVT has lots of features:
 1. support union index, one field or multi fields
