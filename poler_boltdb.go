@@ -1,5 +1,5 @@
-//go:build bolt
-// +build bolt
+//go:build boltdb
+// +build boltdb
 
 package kvt
 
