@@ -19,6 +19,7 @@ const PKPrefix = "pk_"     //primay key name prefix
 const IDXPrefix = "idx_"   //index name prefix
 const MIDXPrefix = "midx_" //mindex return multi index value from one field, it support  slice/array field
 
+const defaultPathJoiner = '/'
 const defaultIDXJoiner = '_'
 const defaultKeyJoiner = ':' //field1:field2,  escape ':' with "`"
 const defaultKeyEscaper = '`'
@@ -58,6 +59,7 @@ type IndexInfo struct {
 	Name   string   //index name with its parent bucket, like "idx_field1_field2"
 	Fields []string //["field1", "field2"...]
 	path   []string //full paraent path to index, eg   {"root", "to", "Bucket"}
+	offset int      //some kv db doesn't support bucket, so add bucket name in the key, it's a bucket prefix offset
 }
 
 type Index struct {
@@ -96,14 +98,14 @@ func parse(obj any) map[string]struct{} {
 // user give us the full path name, need split into []
 func splitPath(fullPath string) (string, []string, error) {
 	name := strings.TrimSpace(fullPath)
-	names := strings.Split(name, "/")
+	names := strings.Split(name, string(defaultPathJoiner))
 	switch len(names) {
 	case 0:
 		return "", []string{}, fmt.Errorf(errFormatInvalid, fullPath)
 	case 1:
 		return names[0], []string{}, nil
 	default:
-		return names[len(names)-1], names[:len(names)-2], nil
+		return names[len(names)-1], names[:len(names)-1], nil
 	}
 }
 
@@ -244,7 +246,16 @@ func New(obj any, kp *KVTParam) (kvt *KVT, err error) {
 // create main data bucket only
 func (kvt *KVT) CreateDataBucket(db Poler) (err error) {
 
-	return db.CreateBucket(kvt.path)
+	prefix, err := db.CreateBucket(kvt.path)
+	if err != nil {
+		return err
+	}
+	if len(prefix) > 0 {
+		kvt.path = []string{string(prefix)} //save prefix for Put/Delete
+		//v.offset = len(prefix)              //save prefix for query
+	}
+
+	return err
 }
 
 // delete main data bucket, DANGEROUSE, you will lost all you data
@@ -257,13 +268,24 @@ func (kvt *KVT) DeleteDataBucket(db Poler) (err error) {
 func (kvt *KVT) CreateIndexBuckets(db Poler) (err error) {
 
 	for _, v := range kvt.indexs {
-		if err = db.CreateBucket(v.path); err != nil {
+		prefix, err := db.CreateBucket(v.path)
+		if err != nil {
 			return err
+		}
+
+		if len(prefix) > 0 {
+			v.path = []string{string(prefix)} //save prefix for Put/Delete
+			v.offset = len(prefix)            //save prefix for query
 		}
 	}
 	for _, v := range kvt.mindexs {
-		if err = db.CreateBucket(v.path); err != nil {
+		prefix, err := db.CreateBucket(v.path)
+		if err != nil {
 			return err
+		}
+		if len(prefix) > 0 {
+			v.path = []string{string(prefix)}
+			v.offset = len(prefix)
 		}
 	}
 	return nil

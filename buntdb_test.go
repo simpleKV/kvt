@@ -1,5 +1,5 @@
-//go:build bolt
-// +build bolt
+//go:build buntdb
+// +build buntdb
 
 package kvt
 
@@ -13,8 +13,169 @@ import (
 	"time"
 	"unsafe"
 
-	bolt "go.etcd.io/bbolt"
+	"github.com/tidwall/buntdb"
 )
+
+func Test_queryEqualAllString(t *testing.T) {
+
+	type Order struct {
+		ID       string
+		Type     string
+		Status   uint16
+		Name     string
+		District string
+		Num      int
+	}
+
+	valueEncode := func(obj any) ([]byte, error) {
+		var network bytes.Buffer // Stand-in for the network.
+		// Create an encoder and send a value.
+		enc := gob.NewEncoder(&network)
+
+		test, _ := obj.(*Order)
+		enc.Encode(test)
+
+		return network.Bytes(), nil
+	}
+	// generater value
+	valueDecode := func(b []byte, obj any) (any, error) {
+		r := bytes.NewReader(b)
+		dec := gob.NewDecoder(r)
+		test := &Order{}
+		dec.Decode(test)
+		return test, nil
+	}
+
+	pk_ID := func(obj any) ([]byte, error) {
+		test, _ := obj.(*Order)
+		return []byte(test.ID), nil
+	}
+
+	// generate key of idx_Type
+	idx_Type := func(obj interface{}) ([]byte, error) {
+		test, _ := obj.(*Order)
+		key := MakeIndexKey(make([]byte, 0, 20),
+			[]byte(test.Type)) //every index should append primary key at end
+		return key, nil
+	}
+	os.Remove("query_test.bdb")
+	bdb, err := buntdb.Open("query_test.bdb")
+	if err != nil {
+		return
+	}
+	defer bdb.Close()
+
+	kp := KVTParam{
+		Bucket:    "Bucket_Order",
+		Marshal:   valueEncode,
+		Unmarshal: valueDecode,
+		Indexs: []Index{
+			{
+				&IndexInfo{Name: "Bucket_Order/idx_Type"},
+				idx_Type,
+			},
+			{
+				&IndexInfo{Name: "pk_ID"},
+				pk_ID,
+			},
+		},
+	}
+
+	k, err := New(Order{}, &kp)
+	if err != nil {
+		t.Errorf("new kvt fail: %s", err)
+		return
+	}
+
+	bdb.Update(func(tx *buntdb.Tx) error {
+		p, _ := NewPoler(tx)
+		k.CreateDataBucket(p)
+		k.SetSequence(p, 1000)
+		k.CreateIndexBuckets(p)
+		return nil
+	})
+
+	odInputs := []Order{
+		Order{
+			ID:       "1001",
+			Type:     "book",
+			Status:   1,
+			Name:     "Alice",
+			District: "East ST",
+		},
+		Order{
+			ID:       "1002",
+			Type:     "fruit",
+			Status:   2,
+			Name:     "Bob",
+			District: "South ST",
+		},
+		Order{
+			ID:       "1003",
+			Type:     "fruit",
+			Status:   3,
+			Name:     "Carl",
+			District: "West ST",
+		},
+		Order{
+			ID:       "1004",
+			Type:     "book",
+			Status:   2,
+			Name:     "Dicken",
+			District: "East ST",
+		},
+	}
+	bdb.Update(func(tx *buntdb.Tx) error {
+		p, _ := NewPoler(tx)
+		for i := range odInputs {
+			//odInputs[i].ID, _ = k.NextSequence(p)
+			fmt.Println("put ", odInputs[i])
+			if err = k.Put(p, &odInputs[i]); err != nil {
+				t.Errorf("put kvt fail: %s", err)
+				return err
+			}
+		}
+		return nil
+	})
+
+	bdb.View(func(tx *buntdb.Tx) error {
+		err := tx.Ascend("", func(key, value string) bool {
+			fmt.Printf("List key: %s, value: %s\n", key, value)
+			return true // continue iteration
+		})
+		return err
+	})
+
+	cmpResult := func(result []any, err error, ords map[string]Order) {
+		fmt.Println("err:", err, "len result:", len(result), len(ords))
+		if err != nil || len(result) != len(ords) {
+			t.Errorf("got query result fail")
+		}
+		for i := range result {
+			odd, _ := result[i].(*Order)
+			if !reflect.DeepEqual(*odd, ords[odd.ID]) {
+				t.Errorf("not found id %s", odd.ID)
+				fmt.Println("odd:", odd)
+			}
+		}
+	}
+
+	qi := QueryInfo{
+		IndexName: "idx_Type",
+		Where: map[string][]byte{
+			"Type": []byte(odInputs[1].Type),
+		},
+	}
+	bdb.View(func(tx *buntdb.Tx) error {
+		p, _ := NewPoler(tx)
+		r, err := k.Query(p, qi)
+		cmpResult(r, err, map[string]Order{odInputs[1].ID: odInputs[1], odInputs[2].ID: odInputs[2]})
+		return nil
+	})
+
+	fmt.Println("################################")
+
+}
 
 func Test_queryEqual(t *testing.T) {
 
@@ -61,7 +222,7 @@ func Test_queryEqual(t *testing.T) {
 		return key, nil
 	}
 	os.Remove("query_test.bdb")
-	bdb, err := bolt.Open("query_test.bdb", 0600, nil)
+	bdb, err := buntdb.Open("query_test.bdb")
 	if err != nil {
 		return
 	}
@@ -73,7 +234,7 @@ func Test_queryEqual(t *testing.T) {
 		Unmarshal: valueDecode,
 		Indexs: []Index{
 			{
-				&IndexInfo{Name: "idx_Type_Status_District"},
+				&IndexInfo{Name: "Bucket_Order/idx_Type_Status_District"},
 				idx_Type_Status_District,
 			},
 			{
@@ -89,7 +250,7 @@ func Test_queryEqual(t *testing.T) {
 		return
 	}
 
-	bdb.Update(func(tx *bolt.Tx) error {
+	bdb.Update(func(tx *buntdb.Tx) error {
 		p, _ := NewPoler(tx)
 		k.CreateDataBucket(p)
 		k.SetSequence(p, 1000)
@@ -123,7 +284,7 @@ func Test_queryEqual(t *testing.T) {
 			District: "East ST",
 		},
 	}
-	bdb.Update(func(tx *bolt.Tx) error {
+	bdb.Update(func(tx *buntdb.Tx) error {
 		p, _ := NewPoler(tx)
 		for i := range odInputs {
 			odInputs[i].ID, _ = k.NextSequence(p)
@@ -136,8 +297,16 @@ func Test_queryEqual(t *testing.T) {
 		return nil
 	})
 
+	bdb.View(func(tx *buntdb.Tx) error {
+		err := tx.Ascend("", func(key, value string) bool {
+			fmt.Printf("List key: %s, value: %s\n", key, value)
+			return true // continue iteration
+		})
+		return err
+	})
+
 	cmpResult := func(result []any, err error, ords map[uint64]Order) {
-		//fmt.Println("err:", err, "len result:", len(result))
+		fmt.Println("err:", err, "len result:", len(result), len(ords))
 		if err != nil || len(result) != len(ords) {
 			t.Errorf("got query result fail")
 		}
@@ -153,12 +322,27 @@ func Test_queryEqual(t *testing.T) {
 	qi := QueryInfo{
 		IndexName: "idx_Type_Status_District",
 		Where: map[string][]byte{
+			"Type": []byte(odInputs[1].Type),
+		},
+	}
+	bdb.View(func(tx *buntdb.Tx) error {
+		p, _ := NewPoler(tx)
+		r, err := k.Query(p, qi)
+		cmpResult(r, err, map[uint64]Order{odInputs[1].ID: odInputs[1], odInputs[2].ID: odInputs[2]})
+		return nil
+	})
+
+	fmt.Println("################################")
+
+	qi = QueryInfo{
+		IndexName: "idx_Type_Status_District",
+		Where: map[string][]byte{
 			"Type":     []byte(odInputs[1].Type),
 			"Status":   Bytes(Ptr(&odInputs[1].Status), unsafe.Sizeof(odInputs[1].Status)),
 			"District": []byte(odInputs[1].District),
 		},
 	}
-	bdb.View(func(tx *bolt.Tx) error {
+	bdb.View(func(tx *buntdb.Tx) error {
 		p, _ := NewPoler(tx)
 		r, err := k.Query(p, qi)
 		cmpResult(r, err, map[uint64]Order{odInputs[1].ID: odInputs[1]})
@@ -174,7 +358,7 @@ func Test_queryEqual(t *testing.T) {
 			//"District": []byte(od.District),
 		},
 	}
-	bdb.View(func(tx *bolt.Tx) error {
+	bdb.View(func(tx *buntdb.Tx) error {
 		p, _ := NewPoler(tx)
 		r, err := k.Query(p, qi)
 		cmpResult(r, err, map[uint64]Order{odInputs[1].ID: odInputs[1], odInputs[2].ID: odInputs[2]})
@@ -190,7 +374,7 @@ func Test_queryEqual(t *testing.T) {
 			"District": []byte("East ST"),
 		},
 	}
-	bdb.View(func(tx *bolt.Tx) error {
+	bdb.View(func(tx *buntdb.Tx) error {
 		p, _ := NewPoler(tx)
 		r, err := k.Query(p, qi)
 		cmpResult(r, err, map[uint64]Order{odInputs[0].ID: odInputs[0], odInputs[3].ID: odInputs[3]})
@@ -206,7 +390,7 @@ func Test_queryEqual(t *testing.T) {
 			"District": []byte("East ST"),
 		},
 	}
-	bdb.View(func(tx *bolt.Tx) error {
+	bdb.View(func(tx *buntdb.Tx) error {
 		p, _ := NewPoler(tx)
 		r, err := k.Query(p, qi)
 		cmpResult(r, err, map[uint64]Order{odInputs[0].ID: odInputs[0], odInputs[3].ID: odInputs[3]})
@@ -222,7 +406,7 @@ func Test_queryEqual(t *testing.T) {
 			//"District": []byte("West ST"),
 		},
 	}
-	bdb.View(func(tx *bolt.Tx) error {
+	bdb.View(func(tx *buntdb.Tx) error {
 		p, _ := NewPoler(tx)
 		r, err := k.Query(p, qi)
 		cmpResult(r, err, map[uint64]Order{odInputs[1].ID: odInputs[1], odInputs[3].ID: odInputs[3]})
@@ -276,7 +460,7 @@ func Test_queryRange(t *testing.T) {
 	}
 
 	os.Remove("query_test.bdb")
-	bdb, err := bolt.Open("query_test.bdb", 0600, nil)
+	bdb, err := buntdb.Open("query_test.bdb")
 	if err != nil {
 		return
 	}
@@ -304,7 +488,7 @@ func Test_queryRange(t *testing.T) {
 		return
 	}
 
-	bdb.Update(func(tx *bolt.Tx) error {
+	bdb.Update(func(tx *buntdb.Tx) error {
 		p, _ := NewPoler(tx)
 		k.CreateDataBucket(p)
 		k.SetSequence(p, 1000)
@@ -344,7 +528,7 @@ func Test_queryRange(t *testing.T) {
 			District: "East ST",
 		},
 	}
-	bdb.Update(func(tx *bolt.Tx) error {
+	bdb.Update(func(tx *buntdb.Tx) error {
 		p, _ := NewPoler(tx)
 		for i := range odInputs {
 			odInputs[i].ID, _ = k.NextSequence(p)
@@ -376,7 +560,7 @@ func Test_queryRange(t *testing.T) {
 			"Status": map[string][]byte{"==": Bytes(Ptr(&odInputs[0].Status), unsafe.Sizeof(odInputs[0].Status))},
 		},
 	}
-	bdb.View(func(tx *bolt.Tx) error {
+	bdb.View(func(tx *buntdb.Tx) error {
 		p, _ := NewPoler(tx)
 		r, err := k.RangeQuery(p, rqi)
 		cmpResult(r, err, map[uint64]Order{odInputs[0].ID: odInputs[0]})
@@ -391,7 +575,7 @@ func Test_queryRange(t *testing.T) {
 			"Status": map[string][]byte{">": Bytes(Ptr(&odInputs[1].Status), unsafe.Sizeof(odInputs[1].Status))},
 		},
 	}
-	bdb.View(func(tx *bolt.Tx) error {
+	bdb.View(func(tx *buntdb.Tx) error {
 		p, _ := NewPoler(tx)
 		r, err := k.RangeQuery(p, rqi)
 		cmpResult(r, err, map[uint64]Order{odInputs[2].ID: odInputs[2], odInputs[4].ID: odInputs[4]})
@@ -406,7 +590,7 @@ func Test_queryRange(t *testing.T) {
 			"Status": map[string][]byte{">=": Bytes(Ptr(&odInputs[1].Status), unsafe.Sizeof(odInputs[1].Status))},
 		},
 	}
-	bdb.View(func(tx *bolt.Tx) error {
+	bdb.View(func(tx *buntdb.Tx) error {
 		p, _ := NewPoler(tx)
 		r, err := k.RangeQuery(p, rqi)
 		cmpResult(r, err, map[uint64]Order{odInputs[2].ID: odInputs[2], odInputs[1].ID: odInputs[1], odInputs[4].ID: odInputs[4]})
@@ -424,7 +608,7 @@ func Test_queryRange(t *testing.T) {
 			},
 		},
 	}
-	bdb.View(func(tx *bolt.Tx) error {
+	bdb.View(func(tx *buntdb.Tx) error {
 		p, _ := NewPoler(tx)
 		r, err := k.RangeQuery(p, rqi)
 		cmpResult(r, err, map[uint64]Order{odInputs[2].ID: odInputs[2], odInputs[1].ID: odInputs[1]})
@@ -442,7 +626,7 @@ func Test_queryRange(t *testing.T) {
 			},
 		},
 	}
-	bdb.View(func(tx *bolt.Tx) error {
+	bdb.View(func(tx *buntdb.Tx) error {
 		p, _ := NewPoler(tx)
 		r, err := k.RangeQuery(p, rqi)
 		cmpResult(r, err, map[uint64]Order{odInputs[2].ID: odInputs[2]})
@@ -461,7 +645,7 @@ func Test_queryRange(t *testing.T) {
 			},
 		},
 	}
-	bdb.View(func(tx *bolt.Tx) error {
+	bdb.View(func(tx *buntdb.Tx) error {
 		p, _ := NewPoler(tx)
 		r, err := k.RangeQuery(p, rqi)
 		cmpResult(r, err, map[uint64]Order{odInputs[1].ID: odInputs[1], odInputs[2].ID: odInputs[2], odInputs[3].ID: odInputs[3], odInputs[4].ID: odInputs[4]})
@@ -478,7 +662,7 @@ func Test_queryRange(t *testing.T) {
 			},
 		},
 	}
-	bdb.View(func(tx *bolt.Tx) error {
+	bdb.View(func(tx *buntdb.Tx) error {
 		p, _ := NewPoler(tx)
 		r, err := k.RangeQuery(p, rqi)
 		cmpResult(r, err, map[uint64]Order{odInputs[3].ID: odInputs[3]})
@@ -531,7 +715,7 @@ func Test_queryTimeRange(t *testing.T) {
 		return key, nil
 	}
 	os.Remove("query_test.bdb")
-	bdb, err := bolt.Open("query_test.bdb", 0600, nil)
+	bdb, err := buntdb.Open("query_test.bdb")
 	if err != nil {
 		return
 	}
@@ -559,7 +743,7 @@ func Test_queryTimeRange(t *testing.T) {
 		return
 	}
 
-	bdb.Update(func(tx *bolt.Tx) error {
+	bdb.Update(func(tx *buntdb.Tx) error {
 		p, _ := NewPoler(tx)
 		k.CreateDataBucket(p)
 		k.SetSequence(p, 1000)
@@ -581,7 +765,7 @@ func Test_queryTimeRange(t *testing.T) {
 			Birth: time.Date(2009, 1, 1, 12, 0, 0, 0, time.UTC),
 		},
 	}
-	bdb.Update(func(tx *bolt.Tx) error {
+	bdb.Update(func(tx *buntdb.Tx) error {
 		p, _ := NewPoler(tx)
 		for i := range ps {
 			ps[i].ID, _ = k.NextSequence(p)
@@ -614,7 +798,7 @@ func Test_queryTimeRange(t *testing.T) {
 			},
 		},
 	}
-	bdb.View(func(tx *bolt.Tx) error {
+	bdb.View(func(tx *buntdb.Tx) error {
 		p, _ := NewPoler(tx)
 		r, err := k.RangeQuery(p, rqi)
 		cmpResult(r, err, map[uint64]People{ps[2].ID: ps[2]})
@@ -629,7 +813,7 @@ func Test_queryTimeRange(t *testing.T) {
 			},
 		},
 	}
-	bdb.View(func(tx *bolt.Tx) error {
+	bdb.View(func(tx *buntdb.Tx) error {
 		p, _ := NewPoler(tx)
 		r, err := k.RangeQuery(p, rqi)
 		cmpResult(r, err, map[uint64]People{ps[1].ID: ps[1]})
@@ -644,7 +828,7 @@ func Test_queryTimeRange(t *testing.T) {
 			},
 		},
 	}
-	bdb.View(func(tx *bolt.Tx) error {
+	bdb.View(func(tx *buntdb.Tx) error {
 		p, _ := NewPoler(tx)
 		r, err := k.RangeQuery(p, rqi)
 		cmpResult(r, err, map[uint64]People{ps[0].ID: ps[0], ps[2].ID: ps[2]})
@@ -711,7 +895,7 @@ func Test_queryMIndex(t *testing.T) {
 		return ret, nil
 	}
 	os.Remove("query_test.bdb")
-	bdb, err := bolt.Open("query_test.bdb", 0600, nil)
+	bdb, err := buntdb.Open("query_test.bdb")
 	if err != nil {
 		return
 	}
@@ -748,7 +932,7 @@ func Test_queryMIndex(t *testing.T) {
 		return
 	}
 
-	bdb.Update(func(tx *bolt.Tx) error {
+	bdb.Update(func(tx *buntdb.Tx) error {
 		p, _ := NewPoler(tx)
 		k.CreateDataBucket(p)
 		k.SetSequence(p, 1000)
@@ -776,7 +960,7 @@ func Test_queryMIndex(t *testing.T) {
 			Level: 2,
 		},
 	}
-	bdb.Update(func(tx *bolt.Tx) error {
+	bdb.Update(func(tx *buntdb.Tx) error {
 		p, _ := NewPoler(tx)
 		for i := range ps {
 			ps[i].ID, _ = k.NextSequence(p)
@@ -828,7 +1012,7 @@ func Test_queryMIndex(t *testing.T) {
 			},
 		},
 	}
-	bdb.View(func(tx *bolt.Tx) error {
+	bdb.View(func(tx *buntdb.Tx) error {
 		p, _ := NewPoler(tx)
 		r, err := k.RangeQuery(p, rqi)
 		cmpResult(r, err, map[uint64]Book{ps[2].ID: ps[2]})
@@ -847,7 +1031,7 @@ func Test_queryMIndex(t *testing.T) {
 		},
 	}
 
-	bdb.View(func(tx *bolt.Tx) error {
+	bdb.View(func(tx *buntdb.Tx) error {
 		p, _ := NewPoler(tx)
 		r, err := k.RangeQuery(p, rqi)
 		cmpResult(r, err, map[uint64]Book{ps[1].ID: ps[1]})
@@ -863,7 +1047,7 @@ func Test_queryMIndex(t *testing.T) {
 		},
 	}
 
-	bdb.View(func(tx *bolt.Tx) error {
+	bdb.View(func(tx *buntdb.Tx) error {
 		p, _ := NewPoler(tx)
 		r, err := k.RangeQuery(p, rqi)
 		fmt.Println(err, r, len(r))
@@ -883,7 +1067,7 @@ func Test_queryMIndex(t *testing.T) {
 		},
 	}
 
-	bdb.View(func(tx *bolt.Tx) error {
+	bdb.View(func(tx *buntdb.Tx) error {
 		p, _ := NewPoler(tx)
 		r, err := k.RangeQuery(p, rqi)
 		cmpResult(r, err, map[uint64]Book{ps[1].ID: ps[1]})
@@ -898,7 +1082,7 @@ func Test_queryMIndex(t *testing.T) {
 			//"District": []byte("West ST"),
 		},
 	}
-	bdb.View(func(tx *bolt.Tx) error {
+	bdb.View(func(tx *buntdb.Tx) error {
 		p, _ := NewPoler(tx)
 		r, err := k.Query(p, qi)
 		cmpResult(r, err, map[uint64]Book{ps[0].ID: ps[0], ps[2].ID: ps[2]})
@@ -906,7 +1090,7 @@ func Test_queryMIndex(t *testing.T) {
 	})
 
 	//add a new tag for ps[1]
-	bdb.Update(func(tx *bolt.Tx) error {
+	bdb.Update(func(tx *buntdb.Tx) error {
 		p, _ := NewPoler(tx)
 		ps[1].Tags = append(ps[1].Tags, "xyz")
 		k.Put(p, &ps[1])
@@ -921,7 +1105,7 @@ func Test_queryMIndex(t *testing.T) {
 			//"District": []byte("West ST"),
 		},
 	}
-	bdb.View(func(tx *bolt.Tx) error {
+	bdb.View(func(tx *buntdb.Tx) error {
 		p, _ := NewPoler(tx)
 		r, err := k.Query(p, qi)
 		cmpResult(r, err, map[uint64]Book{ps[0].ID: ps[0], ps[1].ID: ps[1], ps[2].ID: ps[2]})
@@ -929,7 +1113,7 @@ func Test_queryMIndex(t *testing.T) {
 	})
 
 	//change tags of ps[2], remove "xyz"
-	bdb.Update(func(tx *bolt.Tx) error {
+	bdb.Update(func(tx *buntdb.Tx) error {
 		p, _ := NewPoler(tx)
 		ps[2].Tags = []string{"c", "CC"}
 		k.Put(p, &ps[2])
@@ -944,7 +1128,7 @@ func Test_queryMIndex(t *testing.T) {
 			//"District": []byte("West ST"),
 		},
 	}
-	bdb.View(func(tx *bolt.Tx) error {
+	bdb.View(func(tx *buntdb.Tx) error {
 		p, _ := NewPoler(tx)
 		r, err := k.Query(p, qi)
 		cmpResult(r, err, map[uint64]Book{ps[0].ID: ps[0], ps[1].ID: ps[1]})

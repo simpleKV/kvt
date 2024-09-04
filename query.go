@@ -82,8 +82,8 @@ func (kvt *KVT) comparePartialQueryInfo(partial cmpQueryInfo, index []byte) bool
 		return true
 	}
 
-	//need remove the bucket prefix, for the db which doesn't support bucket
-	keys := SplitIndexKey(index[len(partial.IndexInfo.prefix):])
+	//need remove the bucket prefix, for the db which doesn't support
+	keys := SplitIndexKey(index[partial.IndexInfo.offset:])
 	//index keys will append a PK at end, so it should large than index's fields
 	if len(keys) != len(partial.IndexInfo.Fields)+1 {
 		return false
@@ -156,7 +156,7 @@ func (kvt *KVT) RangeQuery(db Poler, rangeInfo RangeInfo) (result []any, err err
 		}
 	}
 
-	prefix := append(make([]byte, len(index.prefix)), index.prefix...)
+	prefix := make([]byte, 0)
 
 	i := 0
 	partialQueryInfo := cmpQueryInfo{
