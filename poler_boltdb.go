@@ -10,21 +10,21 @@ import (
 	bolt "go.etcd.io/bbolt"
 )
 
-type Bolt struct {
+type boltdb struct {
 	tx *bolt.Tx
 }
 
-func NewPoler(t any) (*Bolt, error) {
+func NewPoler(t any) (Poler, error) {
 
 	tx, ok := t.(*bolt.Tx)
 	if !ok {
 		return nil, fmt.Errorf(errNewPolerFailed)
 	}
-	return &Bolt{tx: tx}, nil
+	return &boltdb{tx: tx}, nil
 }
 
 // for boltdb, it supports bucket, prefix is always empty
-func (this *Bolt) CreateBucket(path []string) (prefix []byte, err error) {
+func (this *boltdb) CreateBucket(path []string) (prefix []byte, err error) {
 
 	switch len(path) {
 	case 0:
@@ -45,7 +45,7 @@ func (this *Bolt) CreateBucket(path []string) (prefix []byte, err error) {
 	return prefix, err
 }
 
-func (this *Bolt) DeleteBucket(path []string) error {
+func (this *boltdb) DeleteBucket(path []string) error {
 	switch len(path) {
 	case 0:
 		return fmt.Errorf(errBucketOpenFailed, "empty bucket name")
@@ -79,7 +79,7 @@ func openBucket(bkt bucketer, path []string) (ret *bolt.Bucket) {
 	return ret
 }
 
-func (this *Bolt) Put(key, value []byte, path []string) error {
+func (this *boltdb) Put(key, value []byte, path []string) error {
 	b := openBucket(this.tx, path)
 	if b == nil {
 		return fmt.Errorf(errBucketOpenFailed, path[len(path)-1])
@@ -87,7 +87,7 @@ func (this *Bolt) Put(key, value []byte, path []string) error {
 	return b.Put(key, value)
 }
 
-func (this *Bolt) Delete(key []byte, path []string) error {
+func (this *boltdb) Delete(key []byte, path []string) error {
 	b := openBucket(this.tx, path)
 	if b == nil {
 		return fmt.Errorf(errBucketOpenFailed, path[len(path)-1])
@@ -95,7 +95,7 @@ func (this *Bolt) Delete(key []byte, path []string) error {
 	return b.Delete(key)
 }
 
-func (this *Bolt) Get(key []byte, path []string) (v []byte, err error) {
+func (this *boltdb) Get(key []byte, path []string) (v []byte, err error) {
 
 	b := openBucket(this.tx, path)
 	if b == nil {
@@ -104,7 +104,7 @@ func (this *Bolt) Get(key []byte, path []string) (v []byte, err error) {
 	return b.Get(key), nil
 }
 
-func (this *Bolt) Query(prefix []byte, filter FilterFunc, path []string) (result []KVPair, err error) {
+func (this *boltdb) Query(prefix []byte, filter FilterFunc, path []string) (result []KVPair, err error) {
 	result = make([]KVPair, 0)
 
 	b := openBucket(this.tx, path)
@@ -122,7 +122,7 @@ func (this *Bolt) Query(prefix []byte, filter FilterFunc, path []string) (result
 	return result, nil
 }
 
-func (this *Bolt) Sequence(path []string) (seq uint64, err error) {
+func (this *boltdb) Sequence(path []string) (seq uint64, err error) {
 
 	b := openBucket(this.tx, path)
 	if b == nil {
@@ -131,7 +131,7 @@ func (this *Bolt) Sequence(path []string) (seq uint64, err error) {
 	return b.Sequence(), nil
 }
 
-func (this *Bolt) NextSequence(path []string) (seq uint64, err error) {
+func (this *boltdb) NextSequence(path []string) (seq uint64, err error) {
 
 	b := openBucket(this.tx, path)
 	if b == nil {
@@ -140,7 +140,7 @@ func (this *Bolt) NextSequence(path []string) (seq uint64, err error) {
 	return b.NextSequence()
 }
 
-func (this *Bolt) SetSequence(path []string, seq uint64) (err error) {
+func (this *boltdb) SetSequence(path []string, seq uint64) (err error) {
 
 	b := openBucket(this.tx, path)
 	if b == nil {
