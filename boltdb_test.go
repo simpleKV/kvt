@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"encoding/gob"
 	"fmt"
+	"math/rand"
 	"os"
 	"reflect"
 	"testing"
@@ -1026,7 +1027,7 @@ func Test_nestBucket(t *testing.T) {
 			return
 		}
 
-		od := Order{1000, "book", 1}
+		od := Order{uint64(rand.Int63()), "book", 1}
 		bdb.Update(func(tx *bolt.Tx) error {
 			p, _ := NewPoler(tx)
 			k.CreateDataBucket(p)
@@ -1048,18 +1049,22 @@ func Test_nestBucket(t *testing.T) {
 			r, err := k.Query(p, qi)
 			if err != nil || len(r) != 1 {
 				t.Errorf("query order fail")
-				fmt.Printf("query order fail %s, %s\n", mainBucket, idxBucket)
+				fmt.Println("query order fail:", mainBucket, idxBucket, err, len(r))
 				return fmt.Errorf("query order fail %s, %s", mainBucket, idxBucket)
 			}
 			o := r[0].(*Order)
 			if !reflect.DeepEqual(od, *o) {
 				t.Errorf("query order fail not equal")
-				fmt.Printf("query order fail %s, %s\n", mainBucket, idxBucket)
+				fmt.Println("query order not equal: ", mainBucket, idxBucket, od, *o)
 				return fmt.Errorf("query order fail %s, %s", mainBucket, idxBucket)
 			}
 			return nil
 		})
-
+		bdb.Update(func(tx *bolt.Tx) error {
+			p, _ := NewPoler(tx)
+			k.Delete(p, &od)
+			return nil
+		})
 	}
 
 	initkvt("bkt_Order", "idx_Type_Status", "idx_Type_Status", []string{})
