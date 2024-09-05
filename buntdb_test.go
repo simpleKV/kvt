@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"encoding/gob"
 	"fmt"
+	"math/rand"
 	"os"
 	"reflect"
 	"testing"
@@ -1134,4 +1135,137 @@ func Test_queryMIndex(t *testing.T) {
 		cmpResult(r, err, map[uint64]Book{ps[0].ID: ps[0], ps[1].ID: ps[1]})
 		return nil
 	})
+}
+
+func Test_nestBucket(t *testing.T) {
+
+	type Order struct {
+		ID     uint64
+		Type   string
+		Status uint16
+	}
+
+	valueEncode := func(obj any) ([]byte, error) {
+		var network bytes.Buffer // Stand-in for the network.
+		// Create an encoder and send a value.
+		enc := gob.NewEncoder(&network)
+
+		test, _ := obj.(*Order)
+		enc.Encode(test)
+
+		return network.Bytes(), nil
+	}
+	// generater value
+	valueDecode := func(b []byte, obj any) (any, error) {
+		r := bytes.NewReader(b)
+		dec := gob.NewDecoder(r)
+		test := &Order{}
+		dec.Decode(test)
+		return test, nil
+	}
+
+	pk_ID := func(obj any) ([]byte, error) {
+		test, _ := obj.(*Order)
+		return Bytes(Ptr(&test.ID), unsafe.Sizeof(test.ID)), nil
+	}
+
+	// generate key of idx_Type_Status
+	idx_Type_Status := func(obj interface{}) ([]byte, error) {
+		test, _ := obj.(*Order)
+		key := MakeIndexKey(make([]byte, 0, 20),
+			[]byte(test.Type),
+			Bytes(Ptr(&test.Status), unsafe.Sizeof(test.Status))) //every index should append primary key at end
+		return key, nil
+	}
+	os.Remove("query_test.bdb")
+	bdb, err := buntdb.Open("query_test.bdb")
+	if err != nil {
+		return
+	}
+	defer bdb.Close()
+
+	initkvt := func(mainBucket, idxBucket, idxName string, fields []string) {
+
+		kp := KVTParam{
+			Bucket:    mainBucket,
+			Marshal:   valueEncode,
+			Unmarshal: valueDecode,
+			Indexs: []Index{
+				{
+					&IndexInfo{
+						Name:   idxBucket,
+						Fields: fields,
+					},
+					idx_Type_Status,
+				},
+				{
+					&IndexInfo{Name: "pk_ID"},
+					pk_ID,
+				},
+			},
+		}
+
+		k, err := New(Order{}, &kp)
+		if err != nil {
+			t.Errorf("new kvt fail: %s", err)
+			return
+		}
+
+		od := Order{uint64(rand.Int63()), "book", 1}
+		bdb.Update(func(tx *buntdb.Tx) error {
+			p, _ := NewPoler(tx)
+			k.CreateDataBucket(p)
+			k.SetSequence(p, 1000)
+			k.CreateIndexBuckets(p)
+			k.Put(p, &od)
+			return nil
+		})
+
+		qi := QueryInfo{
+			IndexName: idxName,
+			Where: map[string][]byte{
+				"Type":   []byte(od.Type),
+				"Status": Bytes(Ptr(&od.Status), unsafe.Sizeof(od.Status)),
+			},
+		}
+		bdb.View(func(tx *buntdb.Tx) error {
+			p, _ := NewPoler(tx)
+			r, err := k.Query(p, qi)
+			if err != nil || len(r) != 1 {
+				t.Errorf("query order fail")
+				fmt.Println("query order fail:", mainBucket, idxBucket, err, len(r))
+				return fmt.Errorf("query order fail %s, %s", mainBucket, idxBucket)
+			}
+			o := r[0].(*Order)
+			if !reflect.DeepEqual(od, *o) {
+				t.Errorf("query order fail not equal")
+				fmt.Println("query order not equal: ", mainBucket, idxBucket, od, *o)
+				return fmt.Errorf("query order fail %s, %s", mainBucket, idxBucket)
+			}
+			return nil
+		})
+		bdb.Update(func(tx *buntdb.Tx) error {
+			p, _ := NewPoler(tx)
+			k.Delete(p, &od)
+			return nil
+		})
+	}
+
+	initkvt("bkt_Order", "idx_Type_Status", "idx_Type_Status", []string{})
+	initkvt("bkt_Order1", "bkt_Order1/idx_Type_Status", "idx_Type_Status", []string{})
+
+	initkvt("a/bkt_Order1", "idx_Type_Status", "idx_Type_Status", []string{})
+	initkvt("bkt_Order2", "idx_Type_Statusaaa", "idx_Type_Statusaaa", []string{"Type", "Status"})
+	initkvt("bkt_Order3", "a/idx_Type_Status", "idx_Type_Status", []string{})
+	initkvt("bkt_Order4", "a/idx_Type_Statuszyz", "idx_Type_Statuszyz", []string{"Type", "Status"})
+	initkvt("bkt_Order5", "bkt_Order5/idx_Type_Statusaaa", "idx_Type_Statusaaa", []string{"Type", "Status"})
+	initkvt("bkt_Order6", "a/b/idx_Type_Statusaaa", "idx_Type_Statusaaa", []string{"Type", "Status"})
+	initkvt("a/bkt_Order7", "a/b/idx_Type_Statusaaa", "idx_Type_Statusaaa", []string{"Type", "Status"})
+	initkvt("a/b/bkt_Order8", "a/idx_Type_Statusaaa", "idx_Type_Statusaaa", []string{"Type", "Status"})
+	initkvt("a/b/bkt_Order9", "idx_Type_Statusaaa", "idx_Type_Statusaaa", []string{"Type", "Status"})
+	initkvt("a/b/bkt_Order10", "bkt_Order10/idx_Type_Statusaaa", "idx_Type_Statusaaa", []string{"Type", "Status"})
+	initkvt("a/b/bkt_Order11", "idx_Type_Status", "idx_Type_Status", []string{})
+	initkvt("a/b/bkt_Order12", "a/idx_Type_Status", "idx_Type_Status", []string{})
+	initkvt("a/b/bkt_Order13", "a/b/idx_Type_Status", "idx_Type_Status", []string{})
+	initkvt("a/b/bkt_Order14", "bkt_Order14/idx_Type_Status", "idx_Type_Status", []string{})
 }
