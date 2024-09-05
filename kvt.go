@@ -156,8 +156,14 @@ func (kvt *KVT) saveIndexs(kp *KVTParam) error {
 			return fmt.Errorf(errIndexConflict, name)
 		}
 		var p []string
-		if len(path) > 0 && path[0] == kvt.bucket { //index nested in data bucket
+		//here we nest idx bucket without path and fields into main data bucket,
+		//for a idx like "idx_Type" is very possible conflict
+		//with another objects's "idx_Type"
+		if (len(path) > 0 && path[0] == kvt.bucket) || (len(path) == 0 && len(kp.Indexs[i].Fields) == 0) { //index nested in data bucket
 			p = append(p, mainPath...)
+			if len(path) == 0 {
+				p = append(p, kvt.bucket)
+			}
 		}
 		p = append(p, path...)
 		p = append(p, name)

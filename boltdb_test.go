@@ -951,3 +951,184 @@ func Test_queryMIndex(t *testing.T) {
 		return nil
 	})
 }
+
+func Test_nestBucket(t *testing.T) {
+
+	type Order struct {
+		ID     uint64
+		Type   string
+		Status uint16
+	}
+
+	valueEncode := func(obj any) ([]byte, error) {
+		var network bytes.Buffer // Stand-in for the network.
+		// Create an encoder and send a value.
+		enc := gob.NewEncoder(&network)
+
+		test, _ := obj.(*Order)
+		enc.Encode(test)
+
+		return network.Bytes(), nil
+	}
+	// generater value
+	valueDecode := func(b []byte, obj any) (any, error) {
+		r := bytes.NewReader(b)
+		dec := gob.NewDecoder(r)
+		test := &Order{}
+		dec.Decode(test)
+		return test, nil
+	}
+
+	pk_ID := func(obj any) ([]byte, error) {
+		test, _ := obj.(*Order)
+		return Bytes(Ptr(&test.ID), unsafe.Sizeof(test.ID)), nil
+	}
+
+	// generate key of idx_Type_Status
+	idx_Type_Status := func(obj interface{}) ([]byte, error) {
+		test, _ := obj.(*Order)
+		key := MakeIndexKey(make([]byte, 0, 20),
+			[]byte(test.Type),
+			Bytes(Ptr(&test.Status), unsafe.Sizeof(test.Status))) //every index should append primary key at end
+		return key, nil
+	}
+	os.Remove("query_test.bdb")
+	bdb, err := bolt.Open("query_test.bdb", 0600, nil)
+	if err != nil {
+		return
+	}
+	defer bdb.Close()
+
+	initkvt := func(mainBucket, idxBucket string, fields []string) {
+
+		kp := KVTParam{
+			Bucket:    mainBucket,
+			Marshal:   valueEncode,
+			Unmarshal: valueDecode,
+			Indexs: []Index{
+				{
+					&IndexInfo{
+						Name:   idxBucket,
+						Fields: fields,
+					},
+					idx_Type_Status,
+				},
+				{
+					&IndexInfo{Name: "pk_ID"},
+					pk_ID,
+				},
+			},
+		}
+
+		k, err := New(Order{}, &kp)
+		if err != nil {
+			t.Errorf("new kvt fail: %s", err)
+			return
+		}
+		fmt.Println("bdb:", bdb)
+		bdb.Update(func(tx *bolt.Tx) error {
+			p, _ := NewPoler(tx)
+			k.CreateDataBucket(p)
+			k.SetSequence(p, 1000)
+			k.CreateIndexBuckets(p)
+			return nil
+		})
+	}
+
+	initkvt("bkt_Order", "idx_Type_Status", []string{})
+	bdb.View(func(tx *bolt.Tx) error {
+		m := tx.Bucket([]byte("bkt_Order"))
+		if m == nil {
+			t.Errorf("create root bucket fail: ")
+		}
+		idx := m.Bucket([]byte("idx_Type_Status"))
+		if idx == nil {
+			t.Errorf("create nest idx bucket fail")
+		}
+		return nil
+	})
+
+	initkvt("bkt_Order1", "bkt_Order1/idx_Type_Status", []string{})
+	bdb.View(func(tx *bolt.Tx) error {
+		m := tx.Bucket([]byte("bkt_Order1"))
+		if m == nil {
+			t.Errorf("create root bucket fail")
+		}
+		idx := m.Bucket([]byte("idx_Type_Status"))
+		if idx == nil {
+			t.Errorf("create nest idx bucket fail")
+		}
+		return nil
+	})
+
+	bdb.Update(func(tx *bolt.Tx) error {
+		_, err := tx.CreateBucketIfNotExists([]byte("a"))
+		fmt.Println("create root a:", err)
+		return nil
+	})
+	initkvt("a/bkt_Order1", "idx_Type_Status", []string{})
+	bdb.View(func(tx *bolt.Tx) error {
+		m := tx.Bucket([]byte("a")).Bucket([]byte("bkt_Order1"))
+		if m == nil {
+			t.Errorf("create root bucket fail")
+		}
+		idx := m.Bucket([]byte("idx_Type_Status"))
+		if idx == nil {
+			t.Errorf("create nest idx bucket fail")
+		}
+		return nil
+	})
+
+	initkvt("bkt_Order2", "idx_Type_Statusaaa", []string{"Type", "Status"})
+	bdb.View(func(tx *bolt.Tx) error {
+		m := tx.Bucket([]byte("bkt_Order2"))
+		if m == nil {
+			t.Errorf("create root bucket fail")
+		}
+		idx := tx.Bucket([]byte("idx_Type_Statusaaa"))
+		if idx == nil {
+			t.Errorf("create nest idx bucket fail")
+		}
+		return nil
+	})
+
+	initkvt("bkt_Order3", "a/idx_Type_Status", []string{})
+	bdb.View(func(tx *bolt.Tx) error {
+		m := tx.Bucket([]byte("bkt_Order3"))
+		if m == nil {
+			t.Errorf("create root bucket fail")
+		}
+		idx := tx.Bucket([]byte("a")).Bucket([]byte("idx_Type_Status"))
+		if idx == nil {
+			t.Errorf("create nest idx bucket fail")
+		}
+		return nil
+	})
+
+	initkvt("bkt_Order4", "a/idx_Type_Statuszyz", []string{"Type", "Status"})
+	bdb.View(func(tx *bolt.Tx) error {
+		m := tx.Bucket([]byte("bkt_Order4"))
+		if m == nil {
+			t.Errorf("create root bucket fail")
+		}
+		idx := tx.Bucket([]byte("a")).Bucket([]byte("idx_Type_Statuszyz"))
+		if idx == nil {
+			t.Errorf("create nest idx bucket fail")
+		}
+		return nil
+	})
+
+	initkvt("bkt_Order5", "bkt_Order5/idx_Type_Statusaaa", []string{"Type", "Status"})
+	bdb.View(func(tx *bolt.Tx) error {
+		m := tx.Bucket([]byte("bkt_Order5"))
+		if m == nil {
+			t.Errorf("create root bucket fail")
+		}
+		idx := m.Bucket([]byte("idx_Type_Statusaaa"))
+		if idx == nil {
+			t.Errorf("create nest idx bucket fail")
+		}
+		return nil
+	})
+
+}
