@@ -999,7 +999,7 @@ func Test_nestBucket(t *testing.T) {
 	}
 	defer bdb.Close()
 
-	initkvt := func(mainBucket, idxBucket string, fields []string) {
+	initkvt := func(mainBucket, idxBucket, idxName string, fields []string) {
 
 		kp := KVTParam{
 			Bucket:    mainBucket,
@@ -1025,110 +1025,62 @@ func Test_nestBucket(t *testing.T) {
 			t.Errorf("new kvt fail: %s", err)
 			return
 		}
-		fmt.Println("bdb:", bdb)
+
+		od := Order{1000, "book", 1}
 		bdb.Update(func(tx *bolt.Tx) error {
 			p, _ := NewPoler(tx)
 			k.CreateDataBucket(p)
 			k.SetSequence(p, 1000)
 			k.CreateIndexBuckets(p)
+			k.Put(p, &od)
 			return nil
 		})
+
+		qi := QueryInfo{
+			IndexName: idxName,
+			Where: map[string][]byte{
+				"Type":   []byte(od.Type),
+				"Status": Bytes(Ptr(&od.Status), unsafe.Sizeof(od.Status)),
+			},
+		}
+		bdb.View(func(tx *bolt.Tx) error {
+			p, _ := NewPoler(tx)
+			r, err := k.Query(p, qi)
+			if err != nil || len(r) != 1 {
+				t.Errorf("query order fail")
+				fmt.Printf("query order fail %s, %s\n", mainBucket, idxBucket)
+				return fmt.Errorf("query order fail %s, %s", mainBucket, idxBucket)
+			}
+			o := r[0].(*Order)
+			if !reflect.DeepEqual(od, *o) {
+				t.Errorf("query order fail not equal")
+				fmt.Printf("query order fail %s, %s\n", mainBucket, idxBucket)
+				return fmt.Errorf("query order fail %s, %s", mainBucket, idxBucket)
+			}
+			return nil
+		})
+
 	}
 
-	initkvt("bkt_Order", "idx_Type_Status", []string{})
-	bdb.View(func(tx *bolt.Tx) error {
-		m := tx.Bucket([]byte("bkt_Order"))
-		if m == nil {
-			t.Errorf("create root bucket fail: ")
-		}
-		idx := m.Bucket([]byte("idx_Type_Status"))
-		if idx == nil {
-			t.Errorf("create nest idx bucket fail")
-		}
-		return nil
-	})
-
-	initkvt("bkt_Order1", "bkt_Order1/idx_Type_Status", []string{})
-	bdb.View(func(tx *bolt.Tx) error {
-		m := tx.Bucket([]byte("bkt_Order1"))
-		if m == nil {
-			t.Errorf("create root bucket fail")
-		}
-		idx := m.Bucket([]byte("idx_Type_Status"))
-		if idx == nil {
-			t.Errorf("create nest idx bucket fail")
-		}
-		return nil
-	})
-
+	initkvt("bkt_Order", "idx_Type_Status", "idx_Type_Status", []string{})
+	initkvt("bkt_Order1", "bkt_Order1/idx_Type_Status", "idx_Type_Status", []string{})
 	bdb.Update(func(tx *bolt.Tx) error {
-		_, err := tx.CreateBucketIfNotExists([]byte("a"))
-		fmt.Println("create root a:", err)
+		a, _ := tx.CreateBucketIfNotExists([]byte("a"))
+		a.CreateBucketIfNotExists([]byte("b"))
 		return nil
 	})
-	initkvt("a/bkt_Order1", "idx_Type_Status", []string{})
-	bdb.View(func(tx *bolt.Tx) error {
-		m := tx.Bucket([]byte("a")).Bucket([]byte("bkt_Order1"))
-		if m == nil {
-			t.Errorf("create root bucket fail")
-		}
-		idx := m.Bucket([]byte("idx_Type_Status"))
-		if idx == nil {
-			t.Errorf("create nest idx bucket fail")
-		}
-		return nil
-	})
-
-	initkvt("bkt_Order2", "idx_Type_Statusaaa", []string{"Type", "Status"})
-	bdb.View(func(tx *bolt.Tx) error {
-		m := tx.Bucket([]byte("bkt_Order2"))
-		if m == nil {
-			t.Errorf("create root bucket fail")
-		}
-		idx := tx.Bucket([]byte("idx_Type_Statusaaa"))
-		if idx == nil {
-			t.Errorf("create nest idx bucket fail")
-		}
-		return nil
-	})
-
-	initkvt("bkt_Order3", "a/idx_Type_Status", []string{})
-	bdb.View(func(tx *bolt.Tx) error {
-		m := tx.Bucket([]byte("bkt_Order3"))
-		if m == nil {
-			t.Errorf("create root bucket fail")
-		}
-		idx := tx.Bucket([]byte("a")).Bucket([]byte("idx_Type_Status"))
-		if idx == nil {
-			t.Errorf("create nest idx bucket fail")
-		}
-		return nil
-	})
-
-	initkvt("bkt_Order4", "a/idx_Type_Statuszyz", []string{"Type", "Status"})
-	bdb.View(func(tx *bolt.Tx) error {
-		m := tx.Bucket([]byte("bkt_Order4"))
-		if m == nil {
-			t.Errorf("create root bucket fail")
-		}
-		idx := tx.Bucket([]byte("a")).Bucket([]byte("idx_Type_Statuszyz"))
-		if idx == nil {
-			t.Errorf("create nest idx bucket fail")
-		}
-		return nil
-	})
-
-	initkvt("bkt_Order5", "bkt_Order5/idx_Type_Statusaaa", []string{"Type", "Status"})
-	bdb.View(func(tx *bolt.Tx) error {
-		m := tx.Bucket([]byte("bkt_Order5"))
-		if m == nil {
-			t.Errorf("create root bucket fail")
-		}
-		idx := m.Bucket([]byte("idx_Type_Statusaaa"))
-		if idx == nil {
-			t.Errorf("create nest idx bucket fail")
-		}
-		return nil
-	})
-
+	initkvt("a/bkt_Order1", "idx_Type_Status", "idx_Type_Status", []string{})
+	initkvt("bkt_Order2", "idx_Type_Statusaaa", "idx_Type_Statusaaa", []string{"Type", "Status"})
+	initkvt("bkt_Order3", "a/idx_Type_Status", "idx_Type_Status", []string{})
+	initkvt("bkt_Order4", "a/idx_Type_Statuszyz", "idx_Type_Statuszyz", []string{"Type", "Status"})
+	initkvt("bkt_Order5", "bkt_Order5/idx_Type_Statusaaa", "idx_Type_Statusaaa", []string{"Type", "Status"})
+	initkvt("bkt_Order6", "a/b/idx_Type_Statusaaa", "idx_Type_Statusaaa", []string{"Type", "Status"})
+	initkvt("a/bkt_Order7", "a/b/idx_Type_Statusaaa", "idx_Type_Statusaaa", []string{"Type", "Status"})
+	initkvt("a/b/bkt_Order8", "a/idx_Type_Statusaaa", "idx_Type_Statusaaa", []string{"Type", "Status"})
+	initkvt("a/b/bkt_Order9", "idx_Type_Statusaaa", "idx_Type_Statusaaa", []string{"Type", "Status"})
+	initkvt("a/b/bkt_Order10", "bkt_Order10/idx_Type_Statusaaa", "idx_Type_Statusaaa", []string{"Type", "Status"})
+	initkvt("a/b/bkt_Order11", "idx_Type_Status", "idx_Type_Status", []string{})
+	initkvt("a/b/bkt_Order12", "a/idx_Type_Status", "idx_Type_Status", []string{})
+	initkvt("a/b/bkt_Order13", "a/b/idx_Type_Status", "idx_Type_Status", []string{})
+	initkvt("a/b/bkt_Order14", "bkt_Order14/idx_Type_Status", "idx_Type_Status", []string{})
 }
