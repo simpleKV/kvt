@@ -31,7 +31,12 @@ func (this *bunt) CreateBucket(path []string) (prefix []byte, err error) {
 		return prefix, fmt.Errorf(errBucketOpenFailed, "empty bucket name")
 	default:
 		p := strings.Join(path, string(defaultPathJoiner))
-		this.SetSequence(path, 0) //need init sequence
+		switch {
+		case strings.HasPrefix(path[len(path)-1], IDXPrefix):
+		case strings.HasPrefix(path[len(path)-1], MIDXPrefix):
+		default:
+			this.SetSequence(path, 0) //only data bucket init sequence
+		}
 		return []byte(p + string(defaultKeyJoiner)), nil
 	}
 
