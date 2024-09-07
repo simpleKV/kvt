@@ -23,8 +23,8 @@ func NewRedisPoler(cli *redis.Client, p redis.Pipeliner, ct context.Context) Pol
 	return &redisdb{rdb: cli, pipe: p, ctx: ct}
 }
 
-// buntdb doesn't support bucket, just add bucket name befor all key
-// "rootpath/to/bucket:", will add a key token tail
+// redis needn't create bucket, just hset under the bkt key
+// prefix is the full bkt key, offset is 0 for redis
 func (this *redisdb) CreateBucket(path []string) (prefix []byte, offset int, err error) {
 	switch len(path) {
 	case 0:
