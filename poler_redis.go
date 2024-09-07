@@ -25,29 +25,29 @@ func NewRedisPoler(cli *redis.Client, p redis.Pipeliner, ct context.Context) Pol
 
 // redis needn't create bucket, just hset under the bkt key
 // prefix is the full bkt key, offset is 0 for redis
-func (this *redisdb) CreateBucket(path []string) (prefix []byte, offset int, err error) {
+func (this *redisdb) CreateBucket(path string) (prefix []byte, offset int, err error) {
 	switch len(path) {
 	case 0:
 		return prefix, offset, fmt.Errorf(errBucketOpenFailed, "empty bucket name")
 	default:
-		p := strings.Join(path, string(defaultPathJoiner))
+		name, _, _ := splitPath(path)
 		switch {
-		case strings.HasPrefix(path[len(path)-1], IDXPrefix):
-		case strings.HasPrefix(path[len(path)-1], MIDXPrefix):
+		case strings.HasPrefix(name, IDXPrefix):
+		case strings.HasPrefix(name, MIDXPrefix):
 		default:
-			this.SetSequence(path[0], 0) //need init sequence
+			this.SetSequence(path, 0) //need init sequence
 		}
 
-		return []byte(p), offset, nil
+		return []byte(path), offset, nil
 	}
 }
 
-func (this *redisdb) DeleteBucket(path []string) error {
+func (this *redisdb) DeleteBucket(path string) error {
 	switch len(path) {
 	case 0:
 		return fmt.Errorf(errBucketOpenFailed, "empty bucket name")
 	default:
-		this.pipe.Del(this.ctx, path[0])
+		this.pipe.Del(this.ctx, path)
 		return nil
 	}
 }
