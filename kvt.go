@@ -46,8 +46,8 @@ const errCompareOperatorInvalid = "compare operator [%s] is invalid"
 const errNewPolerFailed = "new poler failed, invalid db handler"
 
 type KVT struct {
-	bucket    string   //bucket or table name
-	path      []string //its parent path
+	bucket    string //bucket or table name
+	path      string //its parent path
 	pk        Index
 	marshal   IndexFunc
 	unmarshal DecodeFunc
@@ -56,9 +56,9 @@ type KVT struct {
 }
 
 type IndexInfo struct {
-	Name   string   //index name with its parent bucket, like "idx_field1_field2"
+	Name   string   //index name like "idx_field1_field2"
 	Fields []string //["field1", "field2"...]
-	path   []string //full paraent path to index, eg   {"root", "to", "Bucket"}
+	path   string   //full paraent path to index, eg   "root/to/Bucket"
 	offset int      //some kv db doesn't support bucket, so add bucket name in the key, it's a bucket prefix offset
 }
 
@@ -109,12 +109,12 @@ func splitPath(fullPath string) (string, []string, error) {
 	}
 }
 
-func makeIndexInfo(name string, fields, path []string) *IndexInfo {
+func makeIndexInfo(name string, fields, p []string) *IndexInfo {
 	idx := &IndexInfo{
 		Name: name,
 	}
 	idx.Fields = append(idx.Fields, fields...)
-	idx.path = append(idx.path, path...)
+	idx.path = strings.Join(p, string(defaultPathJoiner))
 
 	if len(idx.Fields) == 0 {
 		fields := strings.Split(name, string(defaultIDXJoiner))
@@ -137,8 +137,7 @@ func (kvt *KVT) saveIndexs(kp *KVTParam) error {
 		return err
 	}
 	kvt.bucket = bucket
-	kvt.path = append(kvt.path, mainPath...)
-	kvt.path = append(kvt.path, kvt.bucket) //path is full
+	kvt.path = kp.Bucket
 
 	//indexs
 	kvt.indexs = make(map[string]Index, len(kp.Indexs))
@@ -156,10 +155,10 @@ func (kvt *KVT) saveIndexs(kp *KVTParam) error {
 			return fmt.Errorf(errIndexConflict, name)
 		}
 		var p []string
-		//here we nest idx bucket without path and fields into main data bucket,
+		//here we add prefix main bucket name as idx path
 		//for a idx like "idx_Type" is very possible conflict
 		//with another objects's "idx_Type"
-		if (len(path) > 0 && path[0] == kvt.bucket) || (len(path) == 0 && len(kp.Indexs[i].Fields) == 0) { //index nested in data bucket
+		if (len(path) > 0 && path[0] == kvt.bucket) || (len(path) == 0 && len(kp.Indexs[i].Fields) == 0) {
 			p = append(p, mainPath...)
 			if len(path) == 0 {
 				p = append(p, kvt.bucket)
@@ -257,7 +256,7 @@ func (kvt *KVT) CreateDataBucket(db Poler) (err error) {
 		return err
 	}
 	if len(prefix) > 0 {
-		kvt.path = []string{string(prefix)} //save prefix for Put/Delete
+		kvt.path = string(prefix) //save prefix for Put/Delete
 		//v.offset = len(prefix)              //save prefix for query
 	}
 
@@ -278,18 +277,16 @@ func (kvt *KVT) CreateIndexBuckets(db Poler) (err error) {
 		if err != nil {
 			return err
 		}
+		v.path = string(prefix) //save prefix for Put/Delete
+		v.offset = offset       //save prefix for query
 
-		if len(prefix) > 0 {
-			v.path = []string{string(prefix)} //save prefix for Put/Delete
-			v.offset = offset                 //save prefix for query
-		}
 	}
 	for _, v := range kvt.mindexs {
 		prefix, offset, err := db.CreateBucket(v.path)
 		if err != nil {
 			return err
 		}
-		v.path = []string{string(prefix)}
+		v.path = string(prefix)
 		v.offset = offset
 	}
 	return nil
@@ -317,7 +314,7 @@ func (kvt *KVT) Put(db Poler, obj any) error {
 	key, _ := kvt.pk.Key(obj)
 	value, _ := kvt.marshal(obj)
 
-	old, err := db.Get(kvt.path[0], key)
+	old, err := db.Get(kvt.path, key)
 	if err != nil {
 		return err
 	}
@@ -331,11 +328,11 @@ func (kvt *KVT) Put(db Poler, obj any) error {
 				continue
 			}
 			kold = MakeIndexKey(kold, key)
-			if err = db.Delete(kvt.indexs[i].path[0], kold); err != nil {
+			if err = db.Delete(kvt.indexs[i].path, kold); err != nil {
 				return err
 			}
 			knew = MakeIndexKey(knew, key) //index key should append primary key, to make sure it unique
-			if err := db.Put(kvt.indexs[i].path[0], knew, key); err != nil {
+			if err := db.Put(kvt.indexs[i].path, knew, key); err != nil {
 				return err
 			}
 		}
@@ -346,7 +343,7 @@ func (kvt *KVT) Put(db Poler, obj any) error {
 		for i := range kvt.indexs {
 			ik, _ := kvt.indexs[i].Key(obj) //index key
 			ik = MakeIndexKey(ik, key)      //index key should append primary key, to make sure it unique
-			if err := db.Put(kvt.indexs[i].path[0], ik, key); err != nil {
+			if err := db.Put(kvt.indexs[i].path, ik, key); err != nil {
 				return err
 			}
 		}
@@ -356,13 +353,13 @@ func (kvt *KVT) Put(db Poler, obj any) error {
 		iks, _ := kvt.mindexs[i].Key(obj) //index key
 		for j := range iks {
 			ik := MakeIndexKey(iks[j], key) //index key should append primary key, to make sure it unique
-			if err := db.Put(kvt.mindexs[i].path[0], ik, key); err != nil {
+			if err := db.Put(kvt.mindexs[i].path, ik, key); err != nil {
 				return err
 			}
 		}
 	}
 
-	return db.Put(kvt.path[0], key, value)
+	return db.Put(kvt.path, key, value)
 }
 
 func (kvt *KVT) deleteMIndex(db Poler, obj any, pk []byte) error {
@@ -370,7 +367,7 @@ func (kvt *KVT) deleteMIndex(db Poler, obj any, pk []byte) error {
 		kolds, _ := kvt.mindexs[i].Key(obj)
 		for j := range kolds {
 			kold := MakeIndexKey(kolds[j], pk)
-			if err := db.Delete(kvt.mindexs[i].path[0], kold); err != nil {
+			if err := db.Delete(kvt.mindexs[i].path, kold); err != nil {
 				return err
 			}
 		}
@@ -380,7 +377,7 @@ func (kvt *KVT) deleteMIndex(db Poler, obj any, pk []byte) error {
 
 func (kvt *KVT) Delete(db Poler, obj any) error {
 	key, _ := kvt.pk.Key(obj)
-	old, err := db.Get(kvt.path[0], key)
+	old, err := db.Get(kvt.path, key)
 	if err != nil || len(old) == 0 {
 		return err
 	}
@@ -389,7 +386,7 @@ func (kvt *KVT) Delete(db Poler, obj any) error {
 	for i := range kvt.indexs {
 		kold, _ := kvt.indexs[i].Key(oldObj)
 		kold = MakeIndexKey(kold, key)
-		if err := db.Delete(kvt.indexs[i].path[0], kold); err != nil {
+		if err := db.Delete(kvt.indexs[i].path, kold); err != nil {
 			return err
 		}
 	}
@@ -397,7 +394,7 @@ func (kvt *KVT) Delete(db Poler, obj any) error {
 		return err
 	}
 
-	if err = db.Delete(kvt.path[0], key); err != nil {
+	if err = db.Delete(kvt.path, key); err != nil {
 		return err
 	}
 	return nil
@@ -405,15 +402,15 @@ func (kvt *KVT) Delete(db Poler, obj any) error {
 
 // query the current sequence of the table, read tx, will not change it
 func (kvt *KVT) Sequence(db Poler) (uint64, error) {
-	return db.Sequence(kvt.path[0])
+	return db.Sequence(kvt.path)
 }
 
 // query the next sequence of the table, you should fill it into the primary key, it will Inc it every query
 func (kvt *KVT) NextSequence(db Poler) (uint64, error) {
-	return db.NextSequence(kvt.path[0])
+	return db.NextSequence(kvt.path)
 }
 
 // update the sequence directly
 func (kvt *KVT) SetSequence(db Poler, seq uint64) error {
-	return db.SetSequence(kvt.path[0], seq)
+	return db.SetSequence(kvt.path, seq)
 }

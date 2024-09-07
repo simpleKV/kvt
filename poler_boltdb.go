@@ -6,7 +6,6 @@ package kvt
 import (
 	"bytes"
 	"fmt"
-	"strings"
 
 	bolt "go.etcd.io/bbolt"
 )
@@ -27,35 +26,24 @@ func NewPoler(t any) (Poler, error) {
 // for boltdb, we disable nest idx bucket into main bkt
 // just add main bkt name as prefix idx name
 // like that:  bkt_main/idx_Type
-func (this *boltdb) CreateBucket(path []string) (prefix []byte, offset int, err error) {
-	switch len(path) {
-	case 0:
+func (this *boltdb) CreateBucket(path string) (prefix []byte, offset int, err error) {
+
+	fmt.Println("create bkt:", path)
+	if len(path) == 0 {
 		return prefix, offset, fmt.Errorf(errBucketOpenFailed, "empty bucket name")
-	case 1:
-		prefix = []byte(path[0])
-	default:
-		prefix = []byte(strings.Join(path, string(defaultPathJoiner)))
 	}
+
+	prefix = []byte(path)
 	_, err = this.tx.CreateBucketIfNotExists(prefix)
 	return prefix, offset, err
 }
 
-func (this *boltdb) DeleteBucket(path []string) error {
-	switch len(path) {
-	case 0:
+func (this *boltdb) DeleteBucket(path string) error {
+	if len(path) == 0 {
 		return fmt.Errorf(errBucketOpenFailed, "empty bucket name")
-	case 1:
-		return this.tx.DeleteBucket([]byte(path[len(path)-1]))
-	default:
-		i, bkt := 1, this.tx.Bucket([]byte(path[0]))
-		for ; i < len(path)-1 && bkt != nil; i++ {
-			bkt = bkt.Bucket([]byte(path[i]))
-		}
-		if bkt == nil {
-			return fmt.Errorf(errBucketOpenFailed, path[len(path)-1])
-		}
-		return bkt.DeleteBucket([]byte(path[len(path)-1]))
 	}
+
+	return this.tx.DeleteBucket([]byte(path))
 }
 
 func (this *boltdb) Put(path string, key, value []byte) error {
