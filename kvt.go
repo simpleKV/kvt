@@ -327,11 +327,11 @@ func (kvt *KVT) Put(db Poler, obj any) error {
 			if bytes.Equal(kold, knew) {
 				continue
 			}
-			kold = MakeIndexKey(kold, key)
+			kold = AppendLastKey(kold, key)
 			if err = db.Delete(kvt.indexs[i].path, kold); err != nil {
 				return err
 			}
-			knew = MakeIndexKey(knew, key) //index key should append primary key, to make sure it unique
+			knew = AppendLastKey(knew, key) //index key should append primary key, to make sure it unique
 			if err := db.Put(kvt.indexs[i].path, knew, key); err != nil {
 				return err
 			}
@@ -342,7 +342,7 @@ func (kvt *KVT) Put(db Poler, obj any) error {
 
 		for i := range kvt.indexs {
 			ik, _ := kvt.indexs[i].Key(obj) //index key
-			ik = MakeIndexKey(ik, key)      //index key should append primary key, to make sure it unique
+			ik = AppendLastKey(ik, key)     //index key should append primary key, to make sure it unique
 			if err := db.Put(kvt.indexs[i].path, ik, key); err != nil {
 				return err
 			}
@@ -352,7 +352,7 @@ func (kvt *KVT) Put(db Poler, obj any) error {
 	for i := range kvt.mindexs {
 		iks, _ := kvt.mindexs[i].Key(obj) //index key
 		for j := range iks {
-			ik := MakeIndexKey(iks[j], key) //index key should append primary key, to make sure it unique
+			ik := AppendLastKey(iks[j], key) //index key should append primary key, to make sure it unique
 			if err := db.Put(kvt.mindexs[i].path, ik, key); err != nil {
 				return err
 			}
@@ -366,7 +366,7 @@ func (kvt *KVT) deleteMIndex(db Poler, obj any, pk []byte) error {
 	for i := range kvt.mindexs {
 		kolds, _ := kvt.mindexs[i].Key(obj)
 		for j := range kolds {
-			kold := MakeIndexKey(kolds[j], pk)
+			kold := AppendLastKey(kolds[j], pk)
 			if err := db.Delete(kvt.mindexs[i].path, kold); err != nil {
 				return err
 			}
@@ -388,7 +388,7 @@ func (kvt *KVT) Delete(db Poler, obj any) error {
 	}
 	for i := range kvt.indexs {
 		kold, _ := kvt.indexs[i].Key(oldObj)
-		kold = MakeIndexKey(kold, key)
+		kold = AppendLastKey(kold, key)
 		if err := db.Delete(kvt.indexs[i].path, kold); err != nil {
 			return err
 		}

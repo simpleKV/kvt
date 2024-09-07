@@ -12,13 +12,21 @@ func Bytes(s Ptr, size Size_t) []byte {
 	return (*p)[0:size]
 }
 
+func RealErr(err error) bool {
+	return (*[2]uintptr)(unsafe.Pointer(&err))[1] != 0
+}
+
 // make up several field bytes into a index key
 func MakeIndexKey(dst, k1 []byte, slc ...[]byte) []byte {
 
 	dst = joinKeyWithTokenEscaped(defaultKeyJoiner, defaultKeyEscaper, dst, k1)
+	//always append a token after a key end
+	dst = append(dst, defaultKeyJoiner)
 
 	for i := range slc {
 		dst = joinKeyWithTokenEscaped(defaultKeyJoiner, defaultKeyEscaper, dst, slc[i])
+		//always append a token after a key end
+		dst = append(dst, defaultKeyJoiner)
 	}
 	return dst
 }
@@ -30,16 +38,9 @@ func SplitIndexKey(content []byte) (result [][]byte) {
 	return result
 }
 
-func Escape(raw []byte) (ret []byte) {
-	for i := 0; i < len(raw); i++ {
-		switch raw[i] {
-		case defaultKeyEscaper, defaultKeyJoiner:
-			ret = append(ret, defaultKeyEscaper, raw[i])
-		default:
-			ret = append(ret, raw[i])
-		}
-	}
-	return ret
+// without a tail token compare with MakeIndexKey
+func AppendLastKey(dst, raw []byte) []byte {
+	return joinKeyWithTokenEscaped(defaultKeyJoiner, defaultKeyEscaper, dst, raw)
 }
 
 func joinKeyWithTokenEscaped(token, escaper byte, dst, k1 []byte) []byte {
@@ -51,8 +52,6 @@ func joinKeyWithTokenEscaped(token, escaper byte, dst, k1 []byte) []byte {
 			dst = append(dst, k1[i])
 		}
 	}
-	//always append a token after a key end
-	dst = append(dst, token)
 	return dst
 }
 
