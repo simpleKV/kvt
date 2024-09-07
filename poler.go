@@ -1,7 +1,7 @@
 package kvt
 
 type Poler interface {
-	CreateBucket(path []string) ([]byte, error)
+	CreateBucket(path []string) ([]byte, int, error)
 	DeleteBucket(path []string) error
 
 	Put(k []byte, v []byte, path []string) error

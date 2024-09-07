@@ -25,10 +25,10 @@ func NewPoler(t any) (Poler, error) {
 
 // buntdb doesn't support bucket, just add bucket name befor all key
 // "rootpath/to/bucket:", will add a key token tail
-func (this *bunt) CreateBucket(path []string) (prefix []byte, err error) {
+func (this *bunt) CreateBucket(path []string) (prefix []byte, offset int, err error) {
 	switch len(path) {
 	case 0:
-		return prefix, fmt.Errorf(errBucketOpenFailed, "empty bucket name")
+		return prefix, offset, fmt.Errorf(errBucketOpenFailed, "empty bucket name")
 	default:
 		p := strings.Join(path, string(defaultPathJoiner))
 		switch {
@@ -37,7 +37,7 @@ func (this *bunt) CreateBucket(path []string) (prefix []byte, err error) {
 		default:
 			this.SetSequence(path, 0) //only data bucket init sequence
 		}
-		return []byte(p + string(defaultKeyJoiner)), nil
+		return []byte(p + string(defaultKeyJoiner)), len(p) + 1, nil
 	}
 
 }

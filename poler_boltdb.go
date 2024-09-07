@@ -24,11 +24,10 @@ func NewPoler(t any) (Poler, error) {
 }
 
 // for boltdb, it supports bucket, prefix is always empty
-func (this *boltdb) CreateBucket(path []string) (prefix []byte, err error) {
-
+func (this *boltdb) CreateBucket(path []string) (prefix []byte, offset int, err error) {
 	switch len(path) {
 	case 0:
-		return prefix, fmt.Errorf(errBucketOpenFailed, "empty bucket name")
+		return prefix, offset, fmt.Errorf(errBucketOpenFailed, "empty bucket name")
 	case 1:
 		_, err = this.tx.CreateBucketIfNotExists([]byte(path[0]))
 	default:
@@ -37,12 +36,12 @@ func (this *boltdb) CreateBucket(path []string) (prefix []byte, err error) {
 			bkt = bkt.Bucket([]byte(path[i]))
 		}
 		if bkt == nil {
-			return prefix, fmt.Errorf(errBucketOpenFailed, path[len(path)-1])
+			return prefix, offset, fmt.Errorf(errBucketOpenFailed, path[len(path)-1])
 		}
 		_, err = bkt.CreateBucketIfNotExists([]byte(path[len(path)-1]))
 	}
 
-	return prefix, err
+	return prefix, offset, err
 }
 
 func (this *boltdb) DeleteBucket(path []string) error {

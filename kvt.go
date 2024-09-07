@@ -252,7 +252,7 @@ func New(obj any, kp *KVTParam) (kvt *KVT, err error) {
 // create main data bucket only
 func (kvt *KVT) CreateDataBucket(db Poler) (err error) {
 
-	prefix, err := db.CreateBucket(kvt.path)
+	prefix, _, err := db.CreateBucket(kvt.path)
 	if err != nil {
 		return err
 	}
@@ -274,24 +274,24 @@ func (kvt *KVT) DeleteDataBucket(db Poler) (err error) {
 func (kvt *KVT) CreateIndexBuckets(db Poler) (err error) {
 
 	for _, v := range kvt.indexs {
-		prefix, err := db.CreateBucket(v.path)
+		prefix, offset, err := db.CreateBucket(v.path)
 		if err != nil {
 			return err
 		}
 
 		if len(prefix) > 0 {
 			v.path = []string{string(prefix)} //save prefix for Put/Delete
-			v.offset = len(prefix)            //save prefix for query
+			v.offset = offset                 //save prefix for query
 		}
 	}
 	for _, v := range kvt.mindexs {
-		prefix, err := db.CreateBucket(v.path)
+		prefix, offset, err := db.CreateBucket(v.path)
 		if err != nil {
 			return err
 		}
 		if len(prefix) > 0 {
 			v.path = []string{string(prefix)}
-			v.offset = len(prefix)
+			v.offset = offset
 		}
 	}
 	return nil
@@ -344,6 +344,7 @@ func (kvt *KVT) Put(db Poler, obj any) error {
 		//for mindex, we delete olds
 		kvt.deleteMIndex(db, oldObj, key)
 	} else { //insert new index, and point to the primary key
+
 		for i := range kvt.indexs {
 			ik, _ := kvt.indexs[i].Key(obj) //index key
 			ik = MakeIndexKey(ik, key)      //index key should append primary key, to make sure it unique
