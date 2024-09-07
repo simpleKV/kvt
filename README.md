@@ -4,7 +4,7 @@ define index with some funcs and a struct, KVT will auto maintain the index when
 
 the most important is you can query with KVT by the index you define, just as sqlite or other database system do for you
 
-KVT is NOT a KV system, it's a index manager only, it is aim to integrate with all other db based KV 
+KVT is NOT a KV system, it's a index manager only, its aim is to integrate with all other database based KV 
 
 Now support KV lists:  BoltDB, BuntDB, Redis...
 
@@ -16,10 +16,9 @@ KVT has lots of features:
 5. support partial index query(you can omit some index fields)
 6. support slice index(contain query with midx)
 7. KVT self depends on reflect package few, only a check when init, but maybe your APP code need depend reflect when marshal/unmarshal
-8. support many kv db, it will very easy to add a new kv driver, but now tested bolt only
-9. support nest index into data bucket
-10. support spec data/index bucket path
-11. most import, very easy to use and integrate with other code
+8. support many kv DB, it will very easy to add a new kv driver, now tested BoltDB/BuntDB/Redis 
+9. support spec data/index bucket path
+10. most import, very easy to use and integrate with other code
 
 install kvt:
 ```
@@ -29,7 +28,7 @@ then build you project with One driver build tag: boltdb/buntdb
 ```
 go build -tags boltdb   //build with boltdb, if you want use BoltDB
 go build -tags buntdb   //build with buntdb  if you want use BuntDB
-go build -tags redis   //build with redis  if you want use Redis
+go build -tags redis    //build with redis  if you want use Redis
 ```
 
 here is a simple sample:
