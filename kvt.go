@@ -250,16 +250,12 @@ func New(obj any, kp *KVTParam) (kvt *KVT, err error) {
 
 // create main data bucket only
 func (kvt *KVT) CreateDataBucket(db Poler) (err error) {
-
-	prefix, _, err := db.CreateBucket(kvt.path)
+	_, _, err = db.CreateBucket(kvt.path)
 	if err != nil {
 		return err
 	}
-	if len(prefix) > 0 {
-		kvt.path = string(prefix) //save prefix for Put/Delete
-		//v.offset = len(prefix)              //save prefix for query
-	}
-
+	//kvt.path = string(prefix) //save prefix for Put/Delete
+	//v.offset = len(prefix)              //save prefix for query
 	return err
 }
 
@@ -269,24 +265,23 @@ func (kvt *KVT) DeleteDataBucket(db Poler) (err error) {
 	return db.DeleteBucket(kvt.path)
 }
 
-// create the index buckets and data buckets
+// create the index buckets
 func (kvt *KVT) CreateIndexBuckets(db Poler) (err error) {
-
 	for _, v := range kvt.indexs {
-		prefix, offset, err := db.CreateBucket(v.path)
+		_, offset, err := db.CreateBucket(v.path)
 		if err != nil {
 			return err
 		}
-		v.path = string(prefix) //save prefix for Put/Delete
-		v.offset = offset       //save prefix for query
+		//v.path = string(prefix) //save prefix for Put/Delete
+		v.offset = offset //save prefix for query
 
 	}
 	for _, v := range kvt.mindexs {
-		prefix, offset, err := db.CreateBucket(v.path)
+		_, offset, err := db.CreateBucket(v.path)
 		if err != nil {
 			return err
 		}
-		v.path = string(prefix)
+		//v.path = string(prefix)
 		v.offset = offset
 	}
 	return nil
