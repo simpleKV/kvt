@@ -207,8 +207,9 @@ func (kvt *KVT) RangeQuery(db Poler, rangeInfo RangeInfo) (result []any, err err
 		if err != nil {
 			return result, err
 		}
-		obj, _ := kvt.unmarshal(v, nil)
-		result = append(result, obj)
+		if obj, err := kvt.unmarshal(v, nil); err == nil {
+			result = append(result, obj)
+		}
 	}
 
 	return result, nil
@@ -237,7 +238,7 @@ func (kvt *KVT) Get(db Poler, obj any, dst any) (any, error) {
 	oldByte, err := db.Get(kvt.path, key)
 
 	if err == nil || len(oldByte) == 0 {
-		return dst, nil
+		return dst, fmt.Errorf(errDataNotFound)
 	}
 	return kvt.unmarshal(oldByte, dst)
 }
@@ -251,8 +252,9 @@ func (kvt *KVT) Gets(db Poler, prefix []byte) (result []any, err error) {
 	}
 
 	for i := range pks {
-		obj, _ := kvt.unmarshal(pks[i].Value, nil)
-		result = append(result, obj)
+		if obj, err := kvt.unmarshal(pks[i].Value, nil); err == nil {
+			result = append(result, obj)
+		}
 	}
 
 	return result, nil

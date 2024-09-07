@@ -45,6 +45,8 @@ const errCompareOperatorInvalid = "compare operator [%s] is invalid"
 
 const errNewPolerFailed = "new poler failed, invalid db handler"
 
+const errDataNotFound = "data not found"
+
 type KVT struct {
 	bucket    string //bucket or table name
 	path      string //its parent path
@@ -315,7 +317,10 @@ func (kvt *KVT) Put(db Poler, obj any) error {
 	}
 
 	if len(old) > 0 { // update the exist INDEX
-		oldObj, _ := kvt.unmarshal(old, nil)
+		oldObj, err := kvt.unmarshal(old, nil)
+		if err != nil {
+			return err
+		}
 		for i := range kvt.indexs {
 			kold, _ := kvt.indexs[i].Key(oldObj)
 			knew, _ := kvt.indexs[i].Key(obj)
@@ -377,7 +382,10 @@ func (kvt *KVT) Delete(db Poler, obj any) error {
 		return err
 	}
 
-	oldObj, _ := kvt.unmarshal(old, nil)
+	oldObj, err := kvt.unmarshal(old, nil)
+	if err != nil {
+		return err
+	}
 	for i := range kvt.indexs {
 		kold, _ := kvt.indexs[i].Key(oldObj)
 		kold = MakeIndexKey(kold, key)
