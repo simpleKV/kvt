@@ -35,7 +35,7 @@ func (this *bunt) CreateBucket(path []string) (prefix []byte, offset int, err er
 		case strings.HasPrefix(path[len(path)-1], IDXPrefix):
 		case strings.HasPrefix(path[len(path)-1], MIDXPrefix):
 		default:
-			this.SetSequence(path, 0) //only data bucket init sequence
+			this.SetSequence(path[0], 0) //only data bucket init sequence
 		}
 		return []byte(p + string(defaultKeyJoiner)), len(p) + 1, nil
 	}
@@ -61,20 +61,20 @@ func (this *bunt) DeleteBucket(path []string) error {
 	}
 }
 
-func (this *bunt) Put(key, value []byte, path []string) error {
-	realKey := path[0] + (string(key))
+func (this *bunt) Put(path string, key, value []byte) error {
+	realKey := path + (string(key))
 	_, _, err := this.tx.Set(realKey, string(value), nil)
 	return err
 }
 
-func (this *bunt) Delete(key []byte, path []string) error {
-	realKey := path[0] + (string(key))
+func (this *bunt) Delete(path string, key []byte) error {
+	realKey := path + (string(key))
 	_, err := this.tx.Delete(realKey)
 	return err
 }
 
-func (this *bunt) Get(key []byte, path []string) (value []byte, err error) {
-	realKey := path[0] + (string(key))
+func (this *bunt) Get(path string, key []byte) (value []byte, err error) {
+	realKey := path + (string(key))
 	v, err := this.tx.Get(realKey)
 	if err == buntdb.ErrNotFound {
 		return value, nil
@@ -82,10 +82,10 @@ func (this *bunt) Get(key []byte, path []string) (value []byte, err error) {
 	return []byte(v), err
 }
 
-func (this *bunt) Query(prefix []byte, filter FilterFunc, path []string) (result []KVPair, err error) {
+func (this *bunt) Query(path string, prefix []byte, filter FilterFunc) (result []KVPair, err error) {
 	result = make([]KVPair, 0)
 
-	realPrefix := path[0] + string(prefix) + "*"
+	realPrefix := path + string(prefix) + "*"
 	err = this.tx.AscendKeys(realPrefix, func(key, value string) bool {
 		if filter([]byte(key)) {
 			result = append(result, KVPair{Key: []byte(key), Value: []byte(value)})
@@ -96,9 +96,9 @@ func (this *bunt) Query(prefix []byte, filter FilterFunc, path []string) (result
 	return result, err
 }
 
-func (this *bunt) Sequence(path []string) (seq uint64, err error) {
+func (this *bunt) Sequence(path string) (seq uint64, err error) {
 
-	v, err := this.Get([]byte(":sequence"), path)
+	v, err := this.Get(path, []byte(":sequence"))
 	if err != nil {
 		return 0, err
 	}
@@ -107,7 +107,7 @@ func (this *bunt) Sequence(path []string) (seq uint64, err error) {
 	return *p, nil
 }
 
-func (this *bunt) NextSequence(path []string) (seq uint64, err error) {
+func (this *bunt) NextSequence(path string) (seq uint64, err error) {
 
 	s, err := this.Sequence(path)
 	if err != nil {
@@ -117,6 +117,6 @@ func (this *bunt) NextSequence(path []string) (seq uint64, err error) {
 	return s, this.SetSequence(path, s)
 }
 
-func (this *bunt) SetSequence(path []string, seq uint64) (err error) {
-	return this.Put([]byte(":sequence"), Bytes(Ptr(&seq), unsafe.Sizeof(seq)), path)
+func (this *bunt) SetSequence(path string, seq uint64) (err error) {
+	return this.Put(path, []byte(":sequence"), Bytes(Ptr(&seq), unsafe.Sizeof(seq)))
 }
