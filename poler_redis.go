@@ -35,7 +35,7 @@ func (this *redisdb) CreateBucket(path []string) (prefix []byte, offset int, err
 		case strings.HasPrefix(path[len(path)-1], IDXPrefix):
 		case strings.HasPrefix(path[len(path)-1], MIDXPrefix):
 		default:
-			this.SetSequence(path, 0) //need init sequence
+			this.SetSequence(path[0], 0) //need init sequence
 		}
 
 		return []byte(p), offset, nil
@@ -52,20 +52,20 @@ func (this *redisdb) DeleteBucket(path []string) error {
 	}
 }
 
-func (this *redisdb) Put(key, value []byte, path []string) error {
-	status := this.pipe.HSet(this.ctx, path[0], string(key), value)
+func (this *redisdb) Put(path string, key, value []byte) error {
+	status := this.pipe.HSet(this.ctx, path, string(key), value)
 	_, err := status.Result()
 	return err
 }
 
-func (this *redisdb) Delete(key []byte, path []string) error {
-	intCmd := this.pipe.HDel(this.ctx, path[0], string(key))
+func (this *redisdb) Delete(path string, key []byte) error {
+	intCmd := this.pipe.HDel(this.ctx, path, string(key))
 	_, err := intCmd.Result()
 	return err
 }
 
-func (this *redisdb) Get(key []byte, path []string) (value []byte, err error) {
-	sCmd := this.rdb.HGet(this.ctx, path[0], string(key))
+func (this *redisdb) Get(path string, key []byte) (value []byte, err error) {
+	sCmd := this.rdb.HGet(this.ctx, path, string(key))
 	v, err := sCmd.Bytes()
 	if err != nil && err.Error() == errRedisNil {
 		return v, nil
@@ -73,7 +73,7 @@ func (this *redisdb) Get(key []byte, path []string) (value []byte, err error) {
 	return v, err
 }
 
-func (this *redisdb) Query(prefix []byte, filter FilterFunc, path []string) (result []KVPair, err error) {
+func (this *redisdb) Query(path string, prefix []byte, filter FilterFunc) (result []KVPair, err error) {
 	result = make([]KVPair, 0)
 
 	realPrefix := string(prefix) + "*"
@@ -81,7 +81,7 @@ func (this *redisdb) Query(prefix []byte, filter FilterFunc, path []string) (res
 	for {
 		var keys []string
 		var err error
-		keys, cursor, err = this.rdb.HScan(this.ctx, path[0], cursor, realPrefix, 100).Result()
+		keys, cursor, err = this.rdb.HScan(this.ctx, path, cursor, realPrefix, 100).Result()
 		if err != nil {
 			panic(err)
 		}
@@ -98,23 +98,23 @@ func (this *redisdb) Query(prefix []byte, filter FilterFunc, path []string) (res
 	return result, err
 }
 
-func (this *redisdb) Sequence(path []string) (seq uint64, err error) {
+func (this *redisdb) Sequence(path string) (seq uint64, err error) {
 
-	scmd := this.rdb.HGet(this.ctx, path[0], "sequence")
+	scmd := this.rdb.HGet(this.ctx, path, "sequence")
 	s, err := scmd.Bytes()
 
 	p := (*uint64)(Ptr((&s[0])))
 	return *p, nil
 }
 
-func (this *redisdb) NextSequence(path []string) (seq uint64, err error) {
-	icmd := this.rdb.HIncrBy(this.ctx, path[0], "sequence", 1)
+func (this *redisdb) NextSequence(path string) (seq uint64, err error) {
+	icmd := this.rdb.HIncrBy(this.ctx, path, "sequence", 1)
 	ret, err := icmd.Result()
 	return uint64(ret), err
 }
 
-func (this *redisdb) SetSequence(path []string, seq uint64) (err error) {
-	icmd := this.rdb.HSet(this.ctx, path[0], "sequence", seq)
+func (this *redisdb) SetSequence(path string, seq uint64) (err error) {
+	icmd := this.rdb.HSet(this.ctx, path, "sequence", seq)
 	_, err = icmd.Result()
 	return err
 }
