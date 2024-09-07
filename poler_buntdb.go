@@ -25,30 +25,29 @@ func NewPoler(t any) (Poler, error) {
 
 // buntdb doesn't support bucket, just add bucket name befor all key
 // "rootpath/to/bucket:", will add a key token tail
-func (this *bunt) CreateBucket(path []string) (prefix []byte, offset int, err error) {
+func (this *bunt) CreateBucket(path string) (prefix []byte, offset int, err error) {
 	switch len(path) {
 	case 0:
 		return prefix, offset, fmt.Errorf(errBucketOpenFailed, "empty bucket name")
 	default:
-		p := strings.Join(path, string(defaultPathJoiner))
+		name, _, _ := splitPath(path)
 		switch {
-		case strings.HasPrefix(path[len(path)-1], IDXPrefix):
-		case strings.HasPrefix(path[len(path)-1], MIDXPrefix):
+		case strings.HasPrefix(name, IDXPrefix):
+		case strings.HasPrefix(name, MIDXPrefix):
 		default:
-			this.SetSequence(path[0], 0) //only data bucket init sequence
+			this.SetSequence(path, 0) //only data bucket init sequence
 		}
-		return []byte(p + string(defaultKeyJoiner)), len(p) + 1, nil
+		return []byte(path), len(path), nil
 	}
-
 }
 
-func (this *bunt) DeleteBucket(path []string) error {
+func (this *bunt) DeleteBucket(path string) error {
 	switch len(path) {
 	case 0:
 		return fmt.Errorf(errBucketOpenFailed, "empty bucket name")
 	default:
 		var delkeys []string
-		this.tx.AscendKeys(string(path[0]), func(k, v string) bool {
+		this.tx.AscendKeys(string(path), func(k, v string) bool {
 			delkeys = append(delkeys, k)
 			return true // continue
 		})
