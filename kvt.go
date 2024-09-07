@@ -289,10 +289,8 @@ func (kvt *KVT) CreateIndexBuckets(db Poler) (err error) {
 		if err != nil {
 			return err
 		}
-		if len(prefix) > 0 {
-			v.path = []string{string(prefix)}
-			v.offset = offset
-		}
+		v.path = []string{string(prefix)}
+		v.offset = offset
 	}
 	return nil
 }
@@ -319,7 +317,7 @@ func (kvt *KVT) Put(db Poler, obj any) error {
 	key, _ := kvt.pk.Key(obj)
 	value, _ := kvt.marshal(obj)
 
-	old, err := db.Get(key, kvt.path)
+	old, err := db.Get(kvt.path[0], key)
 	if err != nil {
 		return err
 	}
@@ -333,11 +331,11 @@ func (kvt *KVT) Put(db Poler, obj any) error {
 				continue
 			}
 			kold = MakeIndexKey(kold, key)
-			if err = db.Delete(kold, kvt.indexs[i].path); err != nil {
+			if err = db.Delete(kvt.indexs[i].path[0], kold); err != nil {
 				return err
 			}
 			knew = MakeIndexKey(knew, key) //index key should append primary key, to make sure it unique
-			if err := db.Put(knew, key, kvt.indexs[i].path); err != nil {
+			if err := db.Put(kvt.indexs[i].path[0], knew, key); err != nil {
 				return err
 			}
 		}
@@ -348,7 +346,7 @@ func (kvt *KVT) Put(db Poler, obj any) error {
 		for i := range kvt.indexs {
 			ik, _ := kvt.indexs[i].Key(obj) //index key
 			ik = MakeIndexKey(ik, key)      //index key should append primary key, to make sure it unique
-			if err := db.Put(ik, key, kvt.indexs[i].path); err != nil {
+			if err := db.Put(kvt.indexs[i].path[0], ik, key); err != nil {
 				return err
 			}
 		}
@@ -358,13 +356,13 @@ func (kvt *KVT) Put(db Poler, obj any) error {
 		iks, _ := kvt.mindexs[i].Key(obj) //index key
 		for j := range iks {
 			ik := MakeIndexKey(iks[j], key) //index key should append primary key, to make sure it unique
-			if err := db.Put(ik, key, kvt.mindexs[i].path); err != nil {
+			if err := db.Put(kvt.mindexs[i].path[0], ik, key); err != nil {
 				return err
 			}
 		}
 	}
 
-	return db.Put(key, value, kvt.path)
+	return db.Put(kvt.path[0], key, value)
 }
 
 func (kvt *KVT) deleteMIndex(db Poler, obj any, pk []byte) error {
@@ -372,7 +370,7 @@ func (kvt *KVT) deleteMIndex(db Poler, obj any, pk []byte) error {
 		kolds, _ := kvt.mindexs[i].Key(obj)
 		for j := range kolds {
 			kold := MakeIndexKey(kolds[j], pk)
-			if err := db.Delete(kold, kvt.mindexs[i].path); err != nil {
+			if err := db.Delete(kvt.mindexs[i].path[0], kold); err != nil {
 				return err
 			}
 		}
@@ -382,7 +380,7 @@ func (kvt *KVT) deleteMIndex(db Poler, obj any, pk []byte) error {
 
 func (kvt *KVT) Delete(db Poler, obj any) error {
 	key, _ := kvt.pk.Key(obj)
-	old, err := db.Get(key, kvt.path)
+	old, err := db.Get(kvt.path[0], key)
 	if err != nil || len(old) == 0 {
 		return err
 	}
@@ -391,7 +389,7 @@ func (kvt *KVT) Delete(db Poler, obj any) error {
 	for i := range kvt.indexs {
 		kold, _ := kvt.indexs[i].Key(oldObj)
 		kold = MakeIndexKey(kold, key)
-		if err := db.Delete(kold, kvt.indexs[i].path); err != nil {
+		if err := db.Delete(kvt.indexs[i].path[0], kold); err != nil {
 			return err
 		}
 	}
@@ -399,7 +397,7 @@ func (kvt *KVT) Delete(db Poler, obj any) error {
 		return err
 	}
 
-	if err = db.Delete(key, kvt.path); err != nil {
+	if err = db.Delete(kvt.path[0], key); err != nil {
 		return err
 	}
 	return nil
@@ -407,15 +405,15 @@ func (kvt *KVT) Delete(db Poler, obj any) error {
 
 // query the current sequence of the table, read tx, will not change it
 func (kvt *KVT) Sequence(db Poler) (uint64, error) {
-	return db.Sequence(kvt.path)
+	return db.Sequence(kvt.path[0])
 }
 
 // query the next sequence of the table, you should fill it into the primary key, it will Inc it every query
 func (kvt *KVT) NextSequence(db Poler) (uint64, error) {
-	return db.NextSequence(kvt.path)
+	return db.NextSequence(kvt.path[0])
 }
 
 // update the sequence directly
 func (kvt *KVT) SetSequence(db Poler, seq uint64) error {
-	return db.SetSequence(kvt.path, seq)
+	return db.SetSequence(kvt.path[0], seq)
 }

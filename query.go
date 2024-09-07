@@ -195,13 +195,14 @@ func (kvt *KVT) RangeQuery(db Poler, rangeInfo RangeInfo) (result []any, err err
 		}
 	}
 
-	pks, err := db.Query(prefix, filter, index.path) //query (key, pk) pair
+	pks, err := db.Query(index.path[0], prefix, filter) //query (key, pk) pair
+
 	if err != nil {
 		return result, err
 	}
 
 	for i := range pks {
-		v, err := db.Get(pks[i].Value, kvt.path)
+		v, err := db.Get(kvt.path[0], pks[i].Value)
 
 		if err != nil {
 			return result, err
@@ -233,7 +234,7 @@ func (kvt *KVT) Query(db Poler, info QueryInfo) (result []any, err error) {
 func (kvt *KVT) Get(db Poler, obj any, dst any) (any, error) {
 
 	key, _ := kvt.pk.Key(obj)
-	oldByte, err := db.Get(key, kvt.path)
+	oldByte, err := db.Get(kvt.path[0], key)
 
 	if err == nil || len(oldByte) == 0 {
 		return dst, nil
@@ -244,7 +245,7 @@ func (kvt *KVT) Get(db Poler, obj any, dst any) (any, error) {
 // get all objs with prefixs/key bytes
 func (kvt *KVT) Gets(db Poler, prefix []byte) (result []any, err error) {
 
-	pks, err := db.Query(prefix, func([]byte) bool { return true }, kvt.path) //query (key, pk) pair
+	pks, err := db.Query(kvt.path[0], prefix, func([]byte) bool { return true }) //query (key, pk) pair
 	if err != nil {
 		return result, err
 	}

@@ -4,14 +4,14 @@ type Poler interface {
 	CreateBucket(path []string) ([]byte, int, error)
 	DeleteBucket(path []string) error
 
-	Put(k []byte, v []byte, path []string) error
-	Get(k []byte, path []string) ([]byte, error)
-	Delete(k []byte, path []string) error
+	Put(path string, k []byte, v []byte) error
+	Get(path string, k []byte) ([]byte, error)
+	Delete(path string, k []byte) error
 	//Query
-	Query(prefix []byte, filter FilterFunc, path []string) ([]KVPair, error)
+	Query(path string, prefix []byte, filter FilterFunc) ([]KVPair, error)
 
 	//sequence api
-	Sequence(path []string) (uint64, error)
-	NextSequence(path []string) (uint64, error)
-	SetSequence(path []string, seq uint64) error
+	Sequence(path string) (uint64, error)
+	NextSequence(path string) (uint64, error)
+	SetSequence(path string, seq uint64) error
 }

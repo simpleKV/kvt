@@ -6,6 +6,7 @@ package kvt
 import (
 	"bytes"
 	"fmt"
+	"strings"
 
 	bolt "go.etcd.io/bbolt"
 )
@@ -23,24 +24,19 @@ func NewPoler(t any) (Poler, error) {
 	return &boltdb{tx: tx}, nil
 }
 
-// for boltdb, it supports bucket, prefix is always empty
+// for boltdb, we disable nest idx bucket into main bkt
+// just add main bkt name as prefix idx name
+// like that:  bkt_main/idx_Type
 func (this *boltdb) CreateBucket(path []string) (prefix []byte, offset int, err error) {
 	switch len(path) {
 	case 0:
 		return prefix, offset, fmt.Errorf(errBucketOpenFailed, "empty bucket name")
 	case 1:
-		_, err = this.tx.CreateBucketIfNotExists([]byte(path[0]))
+		prefix = []byte(path[0])
 	default:
-		i, bkt := 1, this.tx.Bucket([]byte(path[0]))
-		for ; i < len(path)-1 && bkt != nil; i++ {
-			bkt = bkt.Bucket([]byte(path[i]))
-		}
-		if bkt == nil {
-			return prefix, offset, fmt.Errorf(errBucketOpenFailed, path[len(path)-1])
-		}
-		_, err = bkt.CreateBucketIfNotExists([]byte(path[len(path)-1]))
+		prefix = []byte(strings.Join(path, string(defaultPathJoiner)))
 	}
-
+	_, err = this.tx.CreateBucketIfNotExists(prefix)
 	return prefix, offset, err
 }
 
@@ -62,53 +58,36 @@ func (this *boltdb) DeleteBucket(path []string) error {
 	}
 }
 
-type bucketer interface {
-	Bucket([]byte) *bolt.Bucket
-}
-
-// open the targe index
-func openBucket(bkt bucketer, path []string) (ret *bolt.Bucket) {
-	for i := range path {
-		ret = bkt.Bucket([]byte(path[i]))
-		if ret == nil {
-			return nil
-		}
-		bkt = ret
-	}
-	return ret
-}
-
-func (this *boltdb) Put(key, value []byte, path []string) error {
-	b := openBucket(this.tx, path)
+func (this *boltdb) Put(path string, key, value []byte) error {
+	b := this.tx.Bucket([]byte(path))
 	if b == nil {
-		return fmt.Errorf(errBucketOpenFailed, path[len(path)-1])
+		return fmt.Errorf(errBucketOpenFailed, path)
 	}
 	return b.Put(key, value)
 }
 
-func (this *boltdb) Delete(key []byte, path []string) error {
-	b := openBucket(this.tx, path)
+func (this *boltdb) Delete(path string, key []byte) error {
+	b := this.tx.Bucket([]byte(path))
 	if b == nil {
-		return fmt.Errorf(errBucketOpenFailed, path[len(path)-1])
+		return fmt.Errorf(errBucketOpenFailed, path)
 	}
 	return b.Delete(key)
 }
 
-func (this *boltdb) Get(key []byte, path []string) (v []byte, err error) {
-
-	b := openBucket(this.tx, path)
+func (this *boltdb) Get(path string, key []byte) (v []byte, err error) {
+	b := this.tx.Bucket([]byte(path))
 	if b == nil {
-		return v, fmt.Errorf(errBucketOpenFailed, path[len(path)-1])
+		return v, fmt.Errorf(errBucketOpenFailed, path)
 	}
 	return b.Get(key), nil
 }
 
-func (this *boltdb) Query(prefix []byte, filter FilterFunc, path []string) (result []KVPair, err error) {
+func (this *boltdb) Query(path string, prefix []byte, filter FilterFunc) (result []KVPair, err error) {
 	result = make([]KVPair, 0)
 
-	b := openBucket(this.tx, path)
+	b := this.tx.Bucket([]byte(path))
 	if b == nil {
-		return result, fmt.Errorf(errBucketOpenFailed, path[len(path)-1])
+		return result, fmt.Errorf(errBucketOpenFailed, path)
 	}
 	c := b.Cursor()
 	for k, v := c.Seek(prefix); k != nil && bytes.HasPrefix(k, prefix); k, v = c.Next() {
@@ -121,29 +100,26 @@ func (this *boltdb) Query(prefix []byte, filter FilterFunc, path []string) (resu
 	return result, nil
 }
 
-func (this *boltdb) Sequence(path []string) (seq uint64, err error) {
-
-	b := openBucket(this.tx, path)
+func (this *boltdb) Sequence(path string) (seq uint64, err error) {
+	b := this.tx.Bucket([]byte(path))
 	if b == nil {
-		return seq, fmt.Errorf(errBucketOpenFailed, path[len(path)-1])
+		return seq, fmt.Errorf(errBucketOpenFailed, path)
 	}
 	return b.Sequence(), nil
 }
 
-func (this *boltdb) NextSequence(path []string) (seq uint64, err error) {
-
-	b := openBucket(this.tx, path)
+func (this *boltdb) NextSequence(path string) (seq uint64, err error) {
+	b := this.tx.Bucket([]byte(path))
 	if b == nil {
-		return seq, fmt.Errorf(errBucketOpenFailed, path[len(path)-1])
+		return seq, fmt.Errorf(errBucketOpenFailed, path)
 	}
 	return b.NextSequence()
 }
 
-func (this *boltdb) SetSequence(path []string, seq uint64) (err error) {
-
-	b := openBucket(this.tx, path)
+func (this *boltdb) SetSequence(path string, seq uint64) (err error) {
+	b := this.tx.Bucket([]byte(path))
 	if b == nil {
-		return fmt.Errorf(errBucketOpenFailed, path[len(path)-1])
+		return fmt.Errorf(errBucketOpenFailed, path)
 	}
 	return b.SetSequence(seq)
 }
