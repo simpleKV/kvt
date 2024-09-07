@@ -6,7 +6,7 @@ the most important is you can query with KVT by the index you define, just as sq
 
 KVT is NOT a KV system, it's a index manager only, it is aim to integrate with all other db based KV 
 
-Now support KV lists:  BoltDB, BuntDB...
+Now support KV lists:  BoltDB, BuntDB, Redis...
 
 KVT has lots of features:
 1. support union index, one field or multi fields
@@ -29,6 +29,7 @@ then build you project with One driver build tag: boltdb/buntdb
 ```
 go build -tags boltdb   //build with boltdb, if you want use BoltDB
 go build -tags buntdb   //build with buntdb  if you want use BuntDB
+go build -tags redis   //build with redis  if you want use Redis
 ```
 
 here is a simple sample:
