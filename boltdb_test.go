@@ -17,42 +17,20 @@ import (
 	bolt "go.etcd.io/bbolt"
 )
 
-type Order struct {
-	ID       uint64
-	Type     string
-	Status   uint16
-	Name     string
-	District string
-	Num      int
-}
-
-func (obj *Order) Key() ([]byte, error) {
-	return Bytes(Ptr(&obj.ID), unsafe.Sizeof(obj.ID)), nil
-}
-
-func (obj *Order) Value() ([]byte, error) {
-	var network bytes.Buffer // Stand-in for the network.
-	// Create an encoder and send a value.
-	enc := gob.NewEncoder(&network)
-	enc.Encode(obj)
-
-	return network.Bytes(), nil
-}
-
 func Test_queryEqual(t *testing.T) {
 
 	// generater value
 	valueDecode := func(b []byte, obj any) (any, error) {
 		r := bytes.NewReader(b)
 		dec := gob.NewDecoder(r)
-		test := &Order{}
+		test := &order{}
 		dec.Decode(test)
 		return test, nil
 	}
 
 	// generate key of idx_Type_Status
 	idx_Type_Status_District := func(obj interface{}) ([]byte, error) {
-		test, _ := obj.(*Order)
+		test, _ := obj.(*order)
 		key := MakeIndexKey(make([]byte, 0, 20),
 			[]byte(test.Type),
 			Bytes(Ptr(&test.Status), unsafe.Sizeof(test.Status)),
@@ -77,7 +55,7 @@ func Test_queryEqual(t *testing.T) {
 		},
 	}
 
-	k, err := New(Order{}, &kp)
+	k, err := New(order{}, &kp)
 	if err != nil {
 		t.Errorf("new kvt fail: %s", err)
 		return
@@ -91,26 +69,26 @@ func Test_queryEqual(t *testing.T) {
 		return nil
 	})
 
-	odInputs := []Order{
-		Order{
+	odInputs := []order{
+		order{
 			Type:     "book",
 			Status:   1,
 			Name:     "Alice",
 			District: "East ST",
 		},
-		Order{
+		order{
 			Type:     "fruit",
 			Status:   2,
 			Name:     "Bob",
 			District: "South ST",
 		},
-		Order{
+		order{
 			Type:     "fruit",
 			Status:   3,
 			Name:     "Carl",
 			District: "West ST",
 		},
-		Order{
+		order{
 			Type:     "book",
 			Status:   2,
 			Name:     "Dicken",
@@ -130,13 +108,13 @@ func Test_queryEqual(t *testing.T) {
 		return nil
 	})
 
-	cmpResult := func(result []any, err error, ords map[uint64]Order) {
+	cmpResult := func(result []any, err error, ords map[uint64]order) {
 		//fmt.Println("err:", err, "len result:", len(result))
 		if err != nil || len(result) != len(ords) {
 			t.Errorf("got query result fail")
 		}
 		for i := range result {
-			odd, _ := result[i].(*Order)
+			odd, _ := result[i].(*order)
 			if !reflect.DeepEqual(*odd, ords[odd.ID]) {
 				t.Errorf("not found id %d", odd.ID)
 				fmt.Println("odd:", odd)
@@ -155,7 +133,7 @@ func Test_queryEqual(t *testing.T) {
 	bdb.View(func(tx *bolt.Tx) error {
 		p, _ := NewPoler(tx)
 		r, err := k.Query(p, qi)
-		cmpResult(r, err, map[uint64]Order{odInputs[1].ID: odInputs[1]})
+		cmpResult(r, err, map[uint64]order{odInputs[1].ID: odInputs[1]})
 		return nil
 	})
 
@@ -171,7 +149,7 @@ func Test_queryEqual(t *testing.T) {
 	bdb.View(func(tx *bolt.Tx) error {
 		p, _ := NewPoler(tx)
 		r, err := k.Query(p, qi)
-		cmpResult(r, err, map[uint64]Order{odInputs[1].ID: odInputs[1], odInputs[2].ID: odInputs[2]})
+		cmpResult(r, err, map[uint64]order{odInputs[1].ID: odInputs[1], odInputs[2].ID: odInputs[2]})
 		return nil
 	})
 
@@ -187,7 +165,7 @@ func Test_queryEqual(t *testing.T) {
 	bdb.View(func(tx *bolt.Tx) error {
 		p, _ := NewPoler(tx)
 		r, err := k.Query(p, qi)
-		cmpResult(r, err, map[uint64]Order{odInputs[0].ID: odInputs[0], odInputs[3].ID: odInputs[3]})
+		cmpResult(r, err, map[uint64]order{odInputs[0].ID: odInputs[0], odInputs[3].ID: odInputs[3]})
 		return nil
 	})
 
@@ -203,7 +181,7 @@ func Test_queryEqual(t *testing.T) {
 	bdb.View(func(tx *bolt.Tx) error {
 		p, _ := NewPoler(tx)
 		r, err := k.Query(p, qi)
-		cmpResult(r, err, map[uint64]Order{odInputs[0].ID: odInputs[0], odInputs[3].ID: odInputs[3]})
+		cmpResult(r, err, map[uint64]order{odInputs[0].ID: odInputs[0], odInputs[3].ID: odInputs[3]})
 		return nil
 	})
 
@@ -219,7 +197,7 @@ func Test_queryEqual(t *testing.T) {
 	bdb.View(func(tx *bolt.Tx) error {
 		p, _ := NewPoler(tx)
 		r, err := k.Query(p, qi)
-		cmpResult(r, err, map[uint64]Order{odInputs[1].ID: odInputs[1], odInputs[3].ID: odInputs[3]})
+		cmpResult(r, err, map[uint64]order{odInputs[1].ID: odInputs[1], odInputs[3].ID: odInputs[3]})
 		return nil
 	})
 }
@@ -230,14 +208,14 @@ func Test_queryRange(t *testing.T) {
 	valueDecode := func(b []byte, obj any) (any, error) {
 		r := bytes.NewReader(b)
 		dec := gob.NewDecoder(r)
-		test := &Order{}
+		test := &order{}
 		dec.Decode(test)
 		return test, nil
 	}
 
 	// generate key of idx_Type_Status
 	idx_Type_Status_District := func(obj interface{}) ([]byte, error) {
-		test, _ := obj.(*Order)
+		test, _ := obj.(*order)
 		key := MakeIndexKey(make([]byte, 0, 20),
 			[]byte(test.Type),
 			Bytes(Ptr(&test.Status), unsafe.Sizeof(test.Status)),
@@ -263,7 +241,7 @@ func Test_queryRange(t *testing.T) {
 		},
 	}
 
-	k, err := New(Order{}, &kp)
+	k, err := New(order{}, &kp)
 	if err != nil {
 		t.Errorf("new kvt fail: %s", err)
 		return
@@ -277,32 +255,32 @@ func Test_queryRange(t *testing.T) {
 		return nil
 	})
 
-	odInputs := []Order{
-		Order{
+	odInputs := []order{
+		order{
 			Type:     "book",
 			Status:   1,
 			Name:     "Alice",
 			District: "East ST",
 		},
-		Order{
+		order{
 			Type:     "fruit",
 			Status:   2,
 			Name:     "Bob",
 			District: "South ST",
 		},
-		Order{
+		order{
 			Type:     "fruit",
 			Status:   3,
 			Name:     "Carl",
 			District: "West ST",
 		},
-		Order{
+		order{
 			Type:     "book",
 			Status:   2,
 			Name:     "Dicken",
 			District: "East ST",
 		},
-		Order{
+		order{
 			Type:     "fruit",
 			Status:   4,
 			Name:     "Frank",
@@ -321,12 +299,12 @@ func Test_queryRange(t *testing.T) {
 		return nil
 	})
 
-	cmpResult := func(result []any, err error, ords map[uint64]Order) {
+	cmpResult := func(result []any, err error, ords map[uint64]order) {
 		if err != nil || len(result) != len(ords) {
 			t.Errorf("got query result fail")
 		}
 		for i := range result {
-			odd, _ := result[i].(*Order)
+			odd, _ := result[i].(*order)
 			if !reflect.DeepEqual(*odd, ords[odd.ID]) {
 				t.Errorf("not found id %d", odd.ID)
 				fmt.Println("odd:", odd)
@@ -344,7 +322,7 @@ func Test_queryRange(t *testing.T) {
 	bdb.View(func(tx *bolt.Tx) error {
 		p, _ := NewPoler(tx)
 		r, err := k.RangeQuery(p, rqi)
-		cmpResult(r, err, map[uint64]Order{odInputs[0].ID: odInputs[0]})
+		cmpResult(r, err, map[uint64]order{odInputs[0].ID: odInputs[0]})
 		return nil
 	})
 
@@ -359,7 +337,7 @@ func Test_queryRange(t *testing.T) {
 	bdb.View(func(tx *bolt.Tx) error {
 		p, _ := NewPoler(tx)
 		r, err := k.RangeQuery(p, rqi)
-		cmpResult(r, err, map[uint64]Order{odInputs[2].ID: odInputs[2], odInputs[4].ID: odInputs[4]})
+		cmpResult(r, err, map[uint64]order{odInputs[2].ID: odInputs[2], odInputs[4].ID: odInputs[4]})
 		return nil
 	})
 
@@ -374,7 +352,7 @@ func Test_queryRange(t *testing.T) {
 	bdb.View(func(tx *bolt.Tx) error {
 		p, _ := NewPoler(tx)
 		r, err := k.RangeQuery(p, rqi)
-		cmpResult(r, err, map[uint64]Order{odInputs[2].ID: odInputs[2], odInputs[1].ID: odInputs[1], odInputs[4].ID: odInputs[4]})
+		cmpResult(r, err, map[uint64]order{odInputs[2].ID: odInputs[2], odInputs[1].ID: odInputs[1], odInputs[4].ID: odInputs[4]})
 		return nil
 	})
 
@@ -392,7 +370,7 @@ func Test_queryRange(t *testing.T) {
 	bdb.View(func(tx *bolt.Tx) error {
 		p, _ := NewPoler(tx)
 		r, err := k.RangeQuery(p, rqi)
-		cmpResult(r, err, map[uint64]Order{odInputs[2].ID: odInputs[2], odInputs[1].ID: odInputs[1]})
+		cmpResult(r, err, map[uint64]order{odInputs[2].ID: odInputs[2], odInputs[1].ID: odInputs[1]})
 		return nil
 	})
 
@@ -410,7 +388,7 @@ func Test_queryRange(t *testing.T) {
 	bdb.View(func(tx *bolt.Tx) error {
 		p, _ := NewPoler(tx)
 		r, err := k.RangeQuery(p, rqi)
-		cmpResult(r, err, map[uint64]Order{odInputs[2].ID: odInputs[2]})
+		cmpResult(r, err, map[uint64]order{odInputs[2].ID: odInputs[2]})
 		return nil
 	})
 
@@ -429,7 +407,7 @@ func Test_queryRange(t *testing.T) {
 	bdb.View(func(tx *bolt.Tx) error {
 		p, _ := NewPoler(tx)
 		r, err := k.RangeQuery(p, rqi)
-		cmpResult(r, err, map[uint64]Order{odInputs[1].ID: odInputs[1], odInputs[2].ID: odInputs[2], odInputs[3].ID: odInputs[3], odInputs[4].ID: odInputs[4]})
+		cmpResult(r, err, map[uint64]order{odInputs[1].ID: odInputs[1], odInputs[2].ID: odInputs[2], odInputs[3].ID: odInputs[3], odInputs[4].ID: odInputs[4]})
 		return nil
 	})
 
@@ -446,29 +424,9 @@ func Test_queryRange(t *testing.T) {
 	bdb.View(func(tx *bolt.Tx) error {
 		p, _ := NewPoler(tx)
 		r, err := k.RangeQuery(p, rqi)
-		cmpResult(r, err, map[uint64]Order{odInputs[3].ID: odInputs[3]})
+		cmpResult(r, err, map[uint64]order{odInputs[3].ID: odInputs[3]})
 		return nil
 	})
-}
-
-type People struct {
-	ID    uint64
-	Name  string
-	Birth time.Time
-}
-
-func (obj *People) Key() ([]byte, error) {
-	return Bytes(Ptr(&obj.ID), unsafe.Sizeof(obj.ID)), nil
-}
-
-func (obj *People) Value() ([]byte, error) {
-	var network bytes.Buffer // Stand-in for the network.
-	// Create an encoder and send a value.
-	enc := gob.NewEncoder(&network)
-
-	enc.Encode(obj)
-
-	return network.Bytes(), nil
 }
 
 func Test_queryTimeRange(t *testing.T) {
@@ -476,11 +434,11 @@ func Test_queryTimeRange(t *testing.T) {
 	valueDecode := func(b []byte, obj any) (any, error) {
 		r := bytes.NewReader(b)
 		dec := gob.NewDecoder(r)
-		var p *People
+		var p *people
 		if obj != nil {
-			p = obj.(*People)
+			p = obj.(*people)
 		} else {
-			p = &People{}
+			p = &people{}
 		}
 		dec.Decode(p)
 		return p, nil
@@ -488,7 +446,7 @@ func Test_queryTimeRange(t *testing.T) {
 
 	// generate key of idx_Type_Status
 	idx_Birth := func(obj interface{}) ([]byte, error) {
-		p, _ := obj.(*People)
+		p, _ := obj.(*people)
 		key := MakeIndexKey(make([]byte, 0, 20),
 			[]byte(p.Birth.Format(time.RFC3339))) //every index should append primary key at end
 		return key, nil
@@ -511,7 +469,7 @@ func Test_queryTimeRange(t *testing.T) {
 		},
 	}
 
-	k, err := New(People{}, &kp)
+	k, err := New(people{}, &kp)
 	if err != nil {
 		t.Errorf("new kvt fail: %s", err)
 		return
@@ -525,16 +483,16 @@ func Test_queryTimeRange(t *testing.T) {
 		return nil
 	})
 
-	ps := []People{
-		People{
+	ps := []people{
+		people{
 			Name:  "Alice",
 			Birth: time.Now(),
 		},
-		People{
+		people{
 			Name:  "Bob",
 			Birth: time.Now().Add(time.Hour * 1),
 		},
-		People{
+		people{
 			Name:  "Carl",
 			Birth: time.Date(2009, 1, 1, 12, 0, 0, 0, time.UTC),
 		},
@@ -549,15 +507,15 @@ func Test_queryTimeRange(t *testing.T) {
 		return nil
 	})
 
-	pepoleEqual := func(p1 People, p2 People) bool {
+	pepoleEqual := func(p1 people, p2 people) bool {
 		return p1.ID == p2.ID && p1.Name == p2.Name && p1.Birth.Format(time.RFC3339) == p1.Birth.Format(time.RFC3339)
 	}
-	cmpResult := func(result []any, err error, pm map[uint64]People) {
+	cmpResult := func(result []any, err error, pm map[uint64]people) {
 		if err != nil || len(result) != len(pm) {
 			t.Errorf("got query result fail %d %d", len(result), len(pm))
 		}
 		for i := range result {
-			p, _ := result[i].(*People)
+			p, _ := result[i].(*people)
 			if !pepoleEqual(*p, pm[p.ID]) {
 				t.Errorf("not found id %d", p.ID)
 			}
@@ -575,7 +533,7 @@ func Test_queryTimeRange(t *testing.T) {
 	bdb.View(func(tx *bolt.Tx) error {
 		p, _ := NewPoler(tx)
 		r, err := k.RangeQuery(p, rqi)
-		cmpResult(r, err, map[uint64]People{ps[2].ID: ps[2]})
+		cmpResult(r, err, map[uint64]people{ps[2].ID: ps[2]})
 		return nil
 	})
 
@@ -590,7 +548,7 @@ func Test_queryTimeRange(t *testing.T) {
 	bdb.View(func(tx *bolt.Tx) error {
 		p, _ := NewPoler(tx)
 		r, err := k.RangeQuery(p, rqi)
-		cmpResult(r, err, map[uint64]People{ps[1].ID: ps[1]})
+		cmpResult(r, err, map[uint64]people{ps[1].ID: ps[1]})
 		return nil
 	})
 
@@ -605,30 +563,9 @@ func Test_queryTimeRange(t *testing.T) {
 	bdb.View(func(tx *bolt.Tx) error {
 		p, _ := NewPoler(tx)
 		r, err := k.RangeQuery(p, rqi)
-		cmpResult(r, err, map[uint64]People{ps[0].ID: ps[0], ps[2].ID: ps[2]})
+		cmpResult(r, err, map[uint64]people{ps[0].ID: ps[0], ps[2].ID: ps[2]})
 		return nil
 	})
-}
-
-type Book struct {
-	ID    uint64
-	Name  string
-	Type  string
-	Tags  []string
-	Level int
-}
-
-func (obj *Book) Key() ([]byte, error) {
-	return Bytes(Ptr(&obj.ID), unsafe.Sizeof(obj.ID)), nil
-}
-
-func (obj *Book) Value() ([]byte, error) {
-	var network bytes.Buffer // Stand-in for the network.
-	// Create an encoder and send a value.
-	enc := gob.NewEncoder(&network)
-	enc.Encode(obj)
-
-	return network.Bytes(), nil
 }
 
 func Test_queryMIndex(t *testing.T) {
@@ -637,11 +574,11 @@ func Test_queryMIndex(t *testing.T) {
 	valueDecode := func(b []byte, obj any) (any, error) {
 		r := bytes.NewReader(b)
 		dec := gob.NewDecoder(r)
-		var p *Book
+		var p *book
 		if obj != nil {
-			p = obj.(*Book)
+			p = obj.(*book)
 		} else {
-			p = &Book{}
+			p = &book{}
 		}
 		dec.Decode(p)
 		return p, nil
@@ -649,14 +586,14 @@ func Test_queryMIndex(t *testing.T) {
 
 	// generate key of idx_Type
 	idx_Type := func(obj interface{}) ([]byte, error) {
-		p, _ := obj.(*Book)
+		p, _ := obj.(*book)
 		key := MakeIndexKey(make([]byte, 0, 20),
 			[]byte(p.Type)) //every index should append primary key at end
 		return key, nil
 	}
 
 	midx_Level_Tag := func(obj interface{}) (ret [][]byte, err error) {
-		p, _ := obj.(*Book)
+		p, _ := obj.(*book)
 		for i := range p.Tags {
 			key := MakeIndexKey(make([]byte, 0, 20),
 				Bytes(Ptr(&p.Level), unsafe.Sizeof(p.Level)),
@@ -693,7 +630,7 @@ func Test_queryMIndex(t *testing.T) {
 		},
 	}
 
-	k, err := New(Book{}, &kp)
+	k, err := New(book{}, &kp)
 	if err != nil {
 		t.Errorf("new kvt fail: %s", err)
 		return
@@ -707,20 +644,20 @@ func Test_queryMIndex(t *testing.T) {
 		return nil
 	})
 
-	ps := []Book{
-		Book{
+	ps := []book{
+		book{
 			Name:  "Alice",
 			Type:  "travel",
 			Tags:  []string{"aa", "AA", "xyz"},
 			Level: 3,
 		},
-		Book{
+		book{
 			Name:  "Bible",
 			Type:  "dictionary",
 			Tags:  []string{"bb", "BB", "xyzz"},
 			Level: 5,
 		},
-		Book{
+		book{
 			Name:  "Cat",
 			Type:  "animal",
 			Tags:  []string{"cc", "CC", "xyz"},
@@ -756,15 +693,15 @@ func Test_queryMIndex(t *testing.T) {
 		return true
 	}
 
-	bookEqual := func(p1 Book, p2 Book) bool {
+	bookEqual := func(p1 book, p2 book) bool {
 		return p1.ID == p2.ID && p1.Name == p2.Name && p1.Type == p2.Type && cmpArray(p1.Tags, p2.Tags)
 	}
-	cmpResult := func(result []any, err error, pm map[uint64]Book) {
+	cmpResult := func(result []any, err error, pm map[uint64]book) {
 		if err != nil || len(result) != len(pm) {
 			t.Errorf("got query result fail %d %d", len(result), len(pm))
 		}
 		for i := range result {
-			p, _ := result[i].(*Book)
+			p, _ := result[i].(*book)
 			if !bookEqual(*p, pm[p.ID]) {
 				t.Errorf("not found id %d", p.ID)
 			}
@@ -782,7 +719,7 @@ func Test_queryMIndex(t *testing.T) {
 	bdb.View(func(tx *bolt.Tx) error {
 		p, _ := NewPoler(tx)
 		r, err := k.RangeQuery(p, rqi)
-		cmpResult(r, err, map[uint64]Book{ps[2].ID: ps[2]})
+		cmpResult(r, err, map[uint64]book{ps[2].ID: ps[2]})
 		return nil
 	})
 
@@ -801,7 +738,7 @@ func Test_queryMIndex(t *testing.T) {
 	bdb.View(func(tx *bolt.Tx) error {
 		p, _ := NewPoler(tx)
 		r, err := k.RangeQuery(p, rqi)
-		cmpResult(r, err, map[uint64]Book{ps[1].ID: ps[1]})
+		cmpResult(r, err, map[uint64]book{ps[1].ID: ps[1]})
 		return nil
 	})
 
@@ -818,7 +755,7 @@ func Test_queryMIndex(t *testing.T) {
 		p, _ := NewPoler(tx)
 		r, err := k.RangeQuery(p, rqi)
 		fmt.Println(err, r, len(r))
-		cmpResult(r, err, map[uint64]Book{ps[0].ID: ps[0], ps[2].ID: ps[2]})
+		cmpResult(r, err, map[uint64]book{ps[0].ID: ps[0], ps[2].ID: ps[2]})
 		return nil
 	})
 
@@ -837,7 +774,7 @@ func Test_queryMIndex(t *testing.T) {
 	bdb.View(func(tx *bolt.Tx) error {
 		p, _ := NewPoler(tx)
 		r, err := k.RangeQuery(p, rqi)
-		cmpResult(r, err, map[uint64]Book{ps[1].ID: ps[1]})
+		cmpResult(r, err, map[uint64]book{ps[1].ID: ps[1]})
 		return nil
 	})
 
@@ -852,7 +789,7 @@ func Test_queryMIndex(t *testing.T) {
 	bdb.View(func(tx *bolt.Tx) error {
 		p, _ := NewPoler(tx)
 		r, err := k.Query(p, qi)
-		cmpResult(r, err, map[uint64]Book{ps[0].ID: ps[0], ps[2].ID: ps[2]})
+		cmpResult(r, err, map[uint64]book{ps[0].ID: ps[0], ps[2].ID: ps[2]})
 		return nil
 	})
 
@@ -875,7 +812,7 @@ func Test_queryMIndex(t *testing.T) {
 	bdb.View(func(tx *bolt.Tx) error {
 		p, _ := NewPoler(tx)
 		r, err := k.Query(p, qi)
-		cmpResult(r, err, map[uint64]Book{ps[0].ID: ps[0], ps[1].ID: ps[1], ps[2].ID: ps[2]})
+		cmpResult(r, err, map[uint64]book{ps[0].ID: ps[0], ps[1].ID: ps[1], ps[2].ID: ps[2]})
 		return nil
 	})
 
@@ -898,27 +835,9 @@ func Test_queryMIndex(t *testing.T) {
 	bdb.View(func(tx *bolt.Tx) error {
 		p, _ := NewPoler(tx)
 		r, err := k.Query(p, qi)
-		cmpResult(r, err, map[uint64]Book{ps[0].ID: ps[0], ps[1].ID: ps[1]})
+		cmpResult(r, err, map[uint64]book{ps[0].ID: ps[0], ps[1].ID: ps[1]})
 		return nil
 	})
-}
-
-type Order2 struct {
-	ID     uint64
-	Type   string
-	Status uint16
-}
-
-func (obj *Order2) Key() ([]byte, error) {
-	return Bytes(Ptr(&obj.ID), unsafe.Sizeof(obj.ID)), nil
-}
-func (obj *Order2) Value() ([]byte, error) {
-	var network bytes.Buffer // Stand-in for the network.
-	// Create an encoder and send a value.
-	enc := gob.NewEncoder(&network)
-	enc.Encode(obj)
-
-	return network.Bytes(), nil
 }
 
 func Test_BucketPath(t *testing.T) {
@@ -926,14 +845,14 @@ func Test_BucketPath(t *testing.T) {
 	valueDecode := func(b []byte, obj any) (any, error) {
 		r := bytes.NewReader(b)
 		dec := gob.NewDecoder(r)
-		test := &Order2{}
+		test := &order2{}
 		dec.Decode(test)
 		return test, nil
 	}
 
 	// generate key of idx_Type_Status
 	idx_Type_Status := func(obj interface{}) ([]byte, error) {
-		test, _ := obj.(*Order2)
+		test, _ := obj.(*order2)
 		key := MakeIndexKey(make([]byte, 0, 20),
 			[]byte(test.Type),
 			Bytes(Ptr(&test.Status), unsafe.Sizeof(test.Status))) //every index should append primary key at end
@@ -962,13 +881,13 @@ func Test_BucketPath(t *testing.T) {
 			},
 		}
 
-		k, err := New(Order{}, &kp)
+		k, err := New(order{}, &kp)
 		if err != nil {
 			t.Errorf("new kvt fail: %s", err)
 			return
 		}
 
-		od := Order2{uint64(rand.Int63()), "book", 1}
+		od := order2{uint64(rand.Int63()), "book", 1}
 		bdb.Update(func(tx *bolt.Tx) error {
 			p, _ := NewPoler(tx)
 			k.CreateDataBucket(p)
@@ -993,7 +912,7 @@ func Test_BucketPath(t *testing.T) {
 				fmt.Println("query order fail:", mainBucket, idxBucket, err, len(r))
 				return fmt.Errorf("query order fail %s, %s", mainBucket, idxBucket)
 			}
-			o := r[0].(*Order2)
+			o := r[0].(*order2)
 			if !reflect.DeepEqual(od, *o) {
 				t.Errorf("query order fail not equal")
 				fmt.Println("query order not equal: ", mainBucket, idxBucket, od, *o)
