@@ -17,205 +17,19 @@ import (
 	"github.com/tidwall/buntdb"
 )
 
-func Test_queryEqualAllString(t *testing.T) {
-
-	type Order struct {
-		ID       string
-		Type     string
-		Status   uint16
-		Name     string
-		District string
-		Num      int
-	}
-
-	valueEncode := func(obj any) ([]byte, error) {
-		var network bytes.Buffer // Stand-in for the network.
-		// Create an encoder and send a value.
-		enc := gob.NewEncoder(&network)
-
-		test, _ := obj.(*Order)
-		enc.Encode(test)
-
-		return network.Bytes(), nil
-	}
-	// generater value
-	valueDecode := func(b []byte, obj any) (any, error) {
-		r := bytes.NewReader(b)
-		dec := gob.NewDecoder(r)
-		test := &Order{}
-		dec.Decode(test)
-		return test, nil
-	}
-
-	pk_ID := func(obj any) ([]byte, error) {
-		test, _ := obj.(*Order)
-		return []byte(test.ID), nil
-	}
-
-	// generate key of idx_Type
-	idx_Type := func(obj interface{}) ([]byte, error) {
-		test, _ := obj.(*Order)
-		key := MakeIndexKey(make([]byte, 0, 20),
-			[]byte(test.Type)) //every index should append primary key at end
-		return key, nil
-	}
-	os.Remove("query_test.bdb")
-	bdb, err := buntdb.Open("query_test.bdb")
-	if err != nil {
-		return
-	}
-	defer bdb.Close()
-
-	kp := KVTParam{
-		Bucket:    "Bucket_Order",
-		Marshal:   valueEncode,
-		Unmarshal: valueDecode,
-		Indexs: []Index{
-			{
-				&IndexInfo{Name: "Bucket_Order/idx_Type"},
-				idx_Type,
-			},
-			{
-				&IndexInfo{Name: "pk_ID"},
-				pk_ID,
-			},
-		},
-	}
-
-	k, err := New(Order{}, &kp)
-	if err != nil {
-		t.Errorf("new kvt fail: %s", err)
-		return
-	}
-
-	bdb.Update(func(tx *buntdb.Tx) error {
-		p, _ := NewPoler(tx)
-		k.CreateDataBucket(p)
-		k.SetSequence(p, 1000)
-		k.CreateIndexBuckets(p)
-		return nil
-	})
-
-	odInputs := []Order{
-		Order{
-			ID:       "1001",
-			Type:     "book",
-			Status:   1,
-			Name:     "Alice",
-			District: "East ST",
-		},
-		Order{
-			ID:       "1002",
-			Type:     "fruit",
-			Status:   2,
-			Name:     "Bob",
-			District: "South ST",
-		},
-		Order{
-			ID:       "1003",
-			Type:     "fruit",
-			Status:   3,
-			Name:     "Carl",
-			District: "West ST",
-		},
-		Order{
-			ID:       "1004",
-			Type:     "book",
-			Status:   2,
-			Name:     "Dicken",
-			District: "East ST",
-		},
-	}
-	bdb.Update(func(tx *buntdb.Tx) error {
-		p, _ := NewPoler(tx)
-		for i := range odInputs {
-			//odInputs[i].ID, _ = k.NextSequence(p)
-			fmt.Println("put ", odInputs[i])
-			if err = k.Put(p, &odInputs[i]); err != nil {
-				t.Errorf("put kvt fail: %s", err)
-				return err
-			}
-		}
-		return nil
-	})
-
-	bdb.View(func(tx *buntdb.Tx) error {
-		err := tx.Ascend("", func(key, value string) bool {
-			fmt.Printf("List key: %s, value: %s\n", key, value)
-			return true // continue iteration
-		})
-		return err
-	})
-
-	cmpResult := func(result []any, err error, ords map[string]Order) {
-		fmt.Println("err:", err, "len result:", len(result), len(ords))
-		if err != nil || len(result) != len(ords) {
-			t.Errorf("got query result fail")
-		}
-		for i := range result {
-			odd, _ := result[i].(*Order)
-			if !reflect.DeepEqual(*odd, ords[odd.ID]) {
-				t.Errorf("not found id %s", odd.ID)
-				fmt.Println("odd:", odd)
-			}
-		}
-	}
-
-	qi := QueryInfo{
-		IndexName: "idx_Type",
-		Where: map[string][]byte{
-			"Type": []byte(odInputs[1].Type),
-		},
-	}
-	bdb.View(func(tx *buntdb.Tx) error {
-		p, _ := NewPoler(tx)
-		r, err := k.Query(p, qi)
-		cmpResult(r, err, map[string]Order{odInputs[1].ID: odInputs[1], odInputs[2].ID: odInputs[2]})
-		return nil
-	})
-
-	fmt.Println("################################")
-
-}
-
 func Test_queryEqual(t *testing.T) {
-
-	type Order struct {
-		ID       uint64
-		Type     string
-		Status   uint16
-		Name     string
-		District string
-		Num      int
-	}
-
-	valueEncode := func(obj any) ([]byte, error) {
-		var network bytes.Buffer // Stand-in for the network.
-		// Create an encoder and send a value.
-		enc := gob.NewEncoder(&network)
-
-		test, _ := obj.(*Order)
-		enc.Encode(test)
-
-		return network.Bytes(), nil
-	}
 	// generater value
 	valueDecode := func(b []byte, obj any) (any, error) {
 		r := bytes.NewReader(b)
 		dec := gob.NewDecoder(r)
-		test := &Order{}
+		test := &order{}
 		dec.Decode(test)
 		return test, nil
-	}
-
-	pk_ID := func(obj any) ([]byte, error) {
-		test, _ := obj.(*Order)
-		return Bytes(Ptr(&test.ID), unsafe.Sizeof(test.ID)), nil
 	}
 
 	// generate key of idx_Type_Status
 	idx_Type_Status_District := func(obj interface{}) ([]byte, error) {
-		test, _ := obj.(*Order)
+		test, _ := obj.(*order)
 		key := MakeIndexKey(make([]byte, 0, 20),
 			[]byte(test.Type),
 			Bytes(Ptr(&test.Status), unsafe.Sizeof(test.Status)),
@@ -230,22 +44,17 @@ func Test_queryEqual(t *testing.T) {
 	defer bdb.Close()
 
 	kp := KVTParam{
-		Bucket:    "Bucket_Order",
-		Marshal:   valueEncode,
+		Bucket:    "Bucket_order",
 		Unmarshal: valueDecode,
 		Indexs: []Index{
 			{
-				&IndexInfo{Name: "Bucket_Order/idx_Type_Status_District"},
+				&IndexInfo{Name: "Bucket_order/idx_Type_Status_District"},
 				idx_Type_Status_District,
-			},
-			{
-				&IndexInfo{Name: "pk_ID"},
-				pk_ID,
 			},
 		},
 	}
 
-	k, err := New(Order{}, &kp)
+	k, err := New(order{}, &kp)
 	if err != nil {
 		t.Errorf("new kvt fail: %s", err)
 		return
@@ -259,26 +68,26 @@ func Test_queryEqual(t *testing.T) {
 		return nil
 	})
 
-	odInputs := []Order{
-		Order{
+	odInputs := []order{
+		order{
 			Type:     "book",
 			Status:   1,
 			Name:     "Alice",
 			District: "East ST",
 		},
-		Order{
+		order{
 			Type:     "fruit",
 			Status:   2,
 			Name:     "Bob",
 			District: "South ST",
 		},
-		Order{
+		order{
 			Type:     "fruit",
 			Status:   3,
 			Name:     "Carl",
 			District: "West ST",
 		},
-		Order{
+		order{
 			Type:     "book",
 			Status:   2,
 			Name:     "Dicken",
@@ -306,13 +115,13 @@ func Test_queryEqual(t *testing.T) {
 		return err
 	})
 
-	cmpResult := func(result []any, err error, ords map[uint64]Order) {
+	cmpResult := func(result []any, err error, ords map[uint64]order) {
 		fmt.Println("err:", err, "len result:", len(result), len(ords))
 		if err != nil || len(result) != len(ords) {
 			t.Errorf("got query result fail")
 		}
 		for i := range result {
-			odd, _ := result[i].(*Order)
+			odd, _ := result[i].(*order)
 			if !reflect.DeepEqual(*odd, ords[odd.ID]) {
 				t.Errorf("not found id %d", odd.ID)
 				fmt.Println("odd:", odd)
@@ -329,7 +138,7 @@ func Test_queryEqual(t *testing.T) {
 	bdb.View(func(tx *buntdb.Tx) error {
 		p, _ := NewPoler(tx)
 		r, err := k.Query(p, qi)
-		cmpResult(r, err, map[uint64]Order{odInputs[1].ID: odInputs[1], odInputs[2].ID: odInputs[2]})
+		cmpResult(r, err, map[uint64]order{odInputs[1].ID: odInputs[1], odInputs[2].ID: odInputs[2]})
 		return nil
 	})
 
@@ -346,7 +155,7 @@ func Test_queryEqual(t *testing.T) {
 	bdb.View(func(tx *buntdb.Tx) error {
 		p, _ := NewPoler(tx)
 		r, err := k.Query(p, qi)
-		cmpResult(r, err, map[uint64]Order{odInputs[1].ID: odInputs[1]})
+		cmpResult(r, err, map[uint64]order{odInputs[1].ID: odInputs[1]})
 		return nil
 	})
 
@@ -362,7 +171,7 @@ func Test_queryEqual(t *testing.T) {
 	bdb.View(func(tx *buntdb.Tx) error {
 		p, _ := NewPoler(tx)
 		r, err := k.Query(p, qi)
-		cmpResult(r, err, map[uint64]Order{odInputs[1].ID: odInputs[1], odInputs[2].ID: odInputs[2]})
+		cmpResult(r, err, map[uint64]order{odInputs[1].ID: odInputs[1], odInputs[2].ID: odInputs[2]})
 		return nil
 	})
 
@@ -378,7 +187,7 @@ func Test_queryEqual(t *testing.T) {
 	bdb.View(func(tx *buntdb.Tx) error {
 		p, _ := NewPoler(tx)
 		r, err := k.Query(p, qi)
-		cmpResult(r, err, map[uint64]Order{odInputs[0].ID: odInputs[0], odInputs[3].ID: odInputs[3]})
+		cmpResult(r, err, map[uint64]order{odInputs[0].ID: odInputs[0], odInputs[3].ID: odInputs[3]})
 		return nil
 	})
 
@@ -394,7 +203,7 @@ func Test_queryEqual(t *testing.T) {
 	bdb.View(func(tx *buntdb.Tx) error {
 		p, _ := NewPoler(tx)
 		r, err := k.Query(p, qi)
-		cmpResult(r, err, map[uint64]Order{odInputs[0].ID: odInputs[0], odInputs[3].ID: odInputs[3]})
+		cmpResult(r, err, map[uint64]order{odInputs[0].ID: odInputs[0], odInputs[3].ID: odInputs[3]})
 		return nil
 	})
 
@@ -410,49 +219,24 @@ func Test_queryEqual(t *testing.T) {
 	bdb.View(func(tx *buntdb.Tx) error {
 		p, _ := NewPoler(tx)
 		r, err := k.Query(p, qi)
-		cmpResult(r, err, map[uint64]Order{odInputs[1].ID: odInputs[1], odInputs[3].ID: odInputs[3]})
+		cmpResult(r, err, map[uint64]order{odInputs[1].ID: odInputs[1], odInputs[3].ID: odInputs[3]})
 		return nil
 	})
 }
 
 func Test_queryRange(t *testing.T) {
-
-	type Order struct {
-		ID       uint64
-		Type     string
-		Status   uint16
-		Name     string
-		District string
-		Num      int
-	}
-
-	valueEncode := func(obj any) ([]byte, error) {
-		var network bytes.Buffer // Stand-in for the network.
-		// Create an encoder and send a value.
-		enc := gob.NewEncoder(&network)
-
-		test, _ := obj.(*Order)
-		enc.Encode(test)
-
-		return network.Bytes(), nil
-	}
 	// generater value
 	valueDecode := func(b []byte, obj any) (any, error) {
 		r := bytes.NewReader(b)
 		dec := gob.NewDecoder(r)
-		test := &Order{}
+		test := &order{}
 		dec.Decode(test)
 		return test, nil
 	}
 
-	pk_ID := func(obj any) ([]byte, error) {
-		test, _ := obj.(*Order)
-		return Bytes(Ptr(&test.ID), unsafe.Sizeof(test.ID)), nil
-	}
-
 	// generate key of idx_Type_Status
 	idx_Type_Status_District := func(obj interface{}) ([]byte, error) {
-		test, _ := obj.(*Order)
+		test, _ := obj.(*order)
 		key := MakeIndexKey(make([]byte, 0, 20),
 			[]byte(test.Type),
 			Bytes(Ptr(&test.Status), unsafe.Sizeof(test.Status)),
@@ -468,22 +252,17 @@ func Test_queryRange(t *testing.T) {
 	defer bdb.Close()
 
 	kp := KVTParam{
-		Bucket:    "Bucket_Order",
-		Marshal:   valueEncode,
+		Bucket:    "Bucket_order",
 		Unmarshal: valueDecode,
 		Indexs: []Index{
 			{
 				&IndexInfo{Name: "idx_Type_Status_District"},
 				idx_Type_Status_District,
 			},
-			{
-				&IndexInfo{Name: "pk_ID"},
-				pk_ID,
-			},
 		},
 	}
 
-	k, err := New(Order{}, &kp)
+	k, err := New(order{}, &kp)
 	if err != nil {
 		t.Errorf("new kvt fail: %s", err)
 		return
@@ -497,32 +276,32 @@ func Test_queryRange(t *testing.T) {
 		return nil
 	})
 
-	odInputs := []Order{
-		Order{
+	odInputs := []order{
+		order{
 			Type:     "book",
 			Status:   1,
 			Name:     "Alice",
 			District: "East ST",
 		},
-		Order{
+		order{
 			Type:     "fruit",
 			Status:   2,
 			Name:     "Bob",
 			District: "South ST",
 		},
-		Order{
+		order{
 			Type:     "fruit",
 			Status:   3,
 			Name:     "Carl",
 			District: "West ST",
 		},
-		Order{
+		order{
 			Type:     "book",
 			Status:   2,
 			Name:     "Dicken",
 			District: "East ST",
 		},
-		Order{
+		order{
 			Type:     "fruit",
 			Status:   4,
 			Name:     "Frank",
@@ -541,12 +320,12 @@ func Test_queryRange(t *testing.T) {
 		return nil
 	})
 
-	cmpResult := func(result []any, err error, ords map[uint64]Order) {
+	cmpResult := func(result []any, err error, ords map[uint64]order) {
 		if err != nil || len(result) != len(ords) {
 			t.Errorf("got query result fail")
 		}
 		for i := range result {
-			odd, _ := result[i].(*Order)
+			odd, _ := result[i].(*order)
 			if !reflect.DeepEqual(*odd, ords[odd.ID]) {
 				t.Errorf("not found id %d", odd.ID)
 				fmt.Println("odd:", odd)
@@ -564,7 +343,7 @@ func Test_queryRange(t *testing.T) {
 	bdb.View(func(tx *buntdb.Tx) error {
 		p, _ := NewPoler(tx)
 		r, err := k.RangeQuery(p, rqi)
-		cmpResult(r, err, map[uint64]Order{odInputs[0].ID: odInputs[0]})
+		cmpResult(r, err, map[uint64]order{odInputs[0].ID: odInputs[0]})
 		return nil
 	})
 
@@ -579,7 +358,7 @@ func Test_queryRange(t *testing.T) {
 	bdb.View(func(tx *buntdb.Tx) error {
 		p, _ := NewPoler(tx)
 		r, err := k.RangeQuery(p, rqi)
-		cmpResult(r, err, map[uint64]Order{odInputs[2].ID: odInputs[2], odInputs[4].ID: odInputs[4]})
+		cmpResult(r, err, map[uint64]order{odInputs[2].ID: odInputs[2], odInputs[4].ID: odInputs[4]})
 		return nil
 	})
 
@@ -594,7 +373,7 @@ func Test_queryRange(t *testing.T) {
 	bdb.View(func(tx *buntdb.Tx) error {
 		p, _ := NewPoler(tx)
 		r, err := k.RangeQuery(p, rqi)
-		cmpResult(r, err, map[uint64]Order{odInputs[2].ID: odInputs[2], odInputs[1].ID: odInputs[1], odInputs[4].ID: odInputs[4]})
+		cmpResult(r, err, map[uint64]order{odInputs[2].ID: odInputs[2], odInputs[1].ID: odInputs[1], odInputs[4].ID: odInputs[4]})
 		return nil
 	})
 
@@ -612,7 +391,7 @@ func Test_queryRange(t *testing.T) {
 	bdb.View(func(tx *buntdb.Tx) error {
 		p, _ := NewPoler(tx)
 		r, err := k.RangeQuery(p, rqi)
-		cmpResult(r, err, map[uint64]Order{odInputs[2].ID: odInputs[2], odInputs[1].ID: odInputs[1]})
+		cmpResult(r, err, map[uint64]order{odInputs[2].ID: odInputs[2], odInputs[1].ID: odInputs[1]})
 		return nil
 	})
 
@@ -630,7 +409,7 @@ func Test_queryRange(t *testing.T) {
 	bdb.View(func(tx *buntdb.Tx) error {
 		p, _ := NewPoler(tx)
 		r, err := k.RangeQuery(p, rqi)
-		cmpResult(r, err, map[uint64]Order{odInputs[2].ID: odInputs[2]})
+		cmpResult(r, err, map[uint64]order{odInputs[2].ID: odInputs[2]})
 		return nil
 	})
 
@@ -649,7 +428,7 @@ func Test_queryRange(t *testing.T) {
 	bdb.View(func(tx *buntdb.Tx) error {
 		p, _ := NewPoler(tx)
 		r, err := k.RangeQuery(p, rqi)
-		cmpResult(r, err, map[uint64]Order{odInputs[1].ID: odInputs[1], odInputs[2].ID: odInputs[2], odInputs[3].ID: odInputs[3], odInputs[4].ID: odInputs[4]})
+		cmpResult(r, err, map[uint64]order{odInputs[1].ID: odInputs[1], odInputs[2].ID: odInputs[2], odInputs[3].ID: odInputs[3], odInputs[4].ID: odInputs[4]})
 		return nil
 	})
 
@@ -666,51 +445,28 @@ func Test_queryRange(t *testing.T) {
 	bdb.View(func(tx *buntdb.Tx) error {
 		p, _ := NewPoler(tx)
 		r, err := k.RangeQuery(p, rqi)
-		cmpResult(r, err, map[uint64]Order{odInputs[3].ID: odInputs[3]})
+		cmpResult(r, err, map[uint64]order{odInputs[3].ID: odInputs[3]})
 		return nil
 	})
 }
 
 func Test_queryTimeRange(t *testing.T) {
-
-	type People struct {
-		ID    uint64
-		Name  string
-		Birth time.Time
-	}
-
-	valueEncode := func(obj any) ([]byte, error) {
-		var network bytes.Buffer // Stand-in for the network.
-		// Create an encoder and send a value.
-		enc := gob.NewEncoder(&network)
-
-		p, _ := obj.(*People)
-		enc.Encode(p)
-
-		return network.Bytes(), nil
-	}
 	// generater value
 	valueDecode := func(b []byte, obj any) (any, error) {
 		r := bytes.NewReader(b)
 		dec := gob.NewDecoder(r)
-		var p *People
+		var p *people
 		if obj != nil {
-			p = obj.(*People)
+			p = obj.(*people)
 		} else {
-			p = &People{}
+			p = &people{}
 		}
 		dec.Decode(p)
 		return p, nil
 	}
-
-	pk_ID := func(obj any) ([]byte, error) {
-		p, _ := obj.(*People)
-		return Bytes(Ptr(&p.ID), unsafe.Sizeof(p.ID)), nil
-	}
-
 	// generate key of idx_Type_Status
 	idx_Birth := func(obj interface{}) ([]byte, error) {
-		p, _ := obj.(*People)
+		p, _ := obj.(*people)
 		key := MakeIndexKey(make([]byte, 0, 20),
 			[]byte(p.Birth.Format(time.RFC3339))) //every index should append primary key at end
 		return key, nil
@@ -724,21 +480,16 @@ func Test_queryTimeRange(t *testing.T) {
 
 	kp := KVTParam{
 		Bucket:    "Bucket_People",
-		Marshal:   valueEncode,
 		Unmarshal: valueDecode,
 		Indexs: []Index{
 			{
 				&IndexInfo{Name: "idx_Birth"},
 				idx_Birth,
 			},
-			{
-				&IndexInfo{Name: "pk_ID"},
-				pk_ID,
-			},
 		},
 	}
 
-	k, err := New(People{}, &kp)
+	k, err := New(people{}, &kp)
 	if err != nil {
 		t.Errorf("new kvt fail: %s", err)
 		return
@@ -752,16 +503,16 @@ func Test_queryTimeRange(t *testing.T) {
 		return nil
 	})
 
-	ps := []People{
-		People{
+	ps := []people{
+		people{
 			Name:  "Alice",
 			Birth: time.Now(),
 		},
-		People{
+		people{
 			Name:  "Bob",
 			Birth: time.Now().Add(time.Hour * 1),
 		},
-		People{
+		people{
 			Name:  "Carl",
 			Birth: time.Date(2009, 1, 1, 12, 0, 0, 0, time.UTC),
 		},
@@ -776,15 +527,15 @@ func Test_queryTimeRange(t *testing.T) {
 		return nil
 	})
 
-	pepoleEqual := func(p1 People, p2 People) bool {
+	pepoleEqual := func(p1 people, p2 people) bool {
 		return p1.ID == p2.ID && p1.Name == p2.Name && p1.Birth.Format(time.RFC3339) == p1.Birth.Format(time.RFC3339)
 	}
-	cmpResult := func(result []any, err error, pm map[uint64]People) {
+	cmpResult := func(result []any, err error, pm map[uint64]people) {
 		if err != nil || len(result) != len(pm) {
 			t.Errorf("got query result fail %d %d", len(result), len(pm))
 		}
 		for i := range result {
-			p, _ := result[i].(*People)
+			p, _ := result[i].(*people)
 			if !pepoleEqual(*p, pm[p.ID]) {
 				t.Errorf("not found id %d", p.ID)
 			}
@@ -802,7 +553,7 @@ func Test_queryTimeRange(t *testing.T) {
 	bdb.View(func(tx *buntdb.Tx) error {
 		p, _ := NewPoler(tx)
 		r, err := k.RangeQuery(p, rqi)
-		cmpResult(r, err, map[uint64]People{ps[2].ID: ps[2]})
+		cmpResult(r, err, map[uint64]people{ps[2].ID: ps[2]})
 		return nil
 	})
 
@@ -817,7 +568,7 @@ func Test_queryTimeRange(t *testing.T) {
 	bdb.View(func(tx *buntdb.Tx) error {
 		p, _ := NewPoler(tx)
 		r, err := k.RangeQuery(p, rqi)
-		cmpResult(r, err, map[uint64]People{ps[1].ID: ps[1]})
+		cmpResult(r, err, map[uint64]people{ps[1].ID: ps[1]})
 		return nil
 	})
 
@@ -832,60 +583,36 @@ func Test_queryTimeRange(t *testing.T) {
 	bdb.View(func(tx *buntdb.Tx) error {
 		p, _ := NewPoler(tx)
 		r, err := k.RangeQuery(p, rqi)
-		cmpResult(r, err, map[uint64]People{ps[0].ID: ps[0], ps[2].ID: ps[2]})
+		cmpResult(r, err, map[uint64]people{ps[0].ID: ps[0], ps[2].ID: ps[2]})
 		return nil
 	})
 }
 
 func Test_queryMIndex(t *testing.T) {
-
-	type Book struct {
-		ID    uint64
-		Name  string
-		Type  string
-		Tags  []string
-		Level int
-	}
-
-	valueEncode := func(obj any) ([]byte, error) {
-		var network bytes.Buffer // Stand-in for the network.
-		// Create an encoder and send a value.
-		enc := gob.NewEncoder(&network)
-
-		p, _ := obj.(*Book)
-		enc.Encode(p)
-
-		return network.Bytes(), nil
-	}
 	// generater value
 	valueDecode := func(b []byte, obj any) (any, error) {
 		r := bytes.NewReader(b)
 		dec := gob.NewDecoder(r)
-		var p *Book
+		var p *book
 		if obj != nil {
-			p = obj.(*Book)
+			p = obj.(*book)
 		} else {
-			p = &Book{}
+			p = &book{}
 		}
 		dec.Decode(p)
 		return p, nil
 	}
 
-	pk_ID := func(obj any) ([]byte, error) {
-		p, _ := obj.(*Book)
-		return Bytes(Ptr(&p.ID), unsafe.Sizeof(p.ID)), nil
-	}
-
 	// generate key of idx_Type
 	idx_Type := func(obj interface{}) ([]byte, error) {
-		p, _ := obj.(*Book)
+		p, _ := obj.(*book)
 		key := MakeIndexKey(make([]byte, 0, 20),
 			[]byte(p.Type)) //every index should append primary key at end
 		return key, nil
 	}
 
 	midx_Level_Tag := func(obj interface{}) (ret [][]byte, err error) {
-		p, _ := obj.(*Book)
+		p, _ := obj.(*book)
 		for i := range p.Tags {
 			key := MakeIndexKey(make([]byte, 0, 20),
 				Bytes(Ptr(&p.Level), unsafe.Sizeof(p.Level)),
@@ -904,16 +631,11 @@ func Test_queryMIndex(t *testing.T) {
 
 	kp := KVTParam{
 		Bucket:    "Bucket_Book",
-		Marshal:   valueEncode,
 		Unmarshal: valueDecode,
 		Indexs: []Index{
 			{
 				&IndexInfo{Name: "Bucket_Book/idx_Type"},
 				idx_Type,
-			},
-			{
-				&IndexInfo{Name: "pk_ID"},
-				pk_ID,
 			},
 		},
 		MIndexs: []MIndex{
@@ -927,7 +649,7 @@ func Test_queryMIndex(t *testing.T) {
 		},
 	}
 
-	k, err := New(Book{}, &kp)
+	k, err := New(book{}, &kp)
 	if err != nil {
 		t.Errorf("new kvt fail: %s", err)
 		return
@@ -941,20 +663,20 @@ func Test_queryMIndex(t *testing.T) {
 		return nil
 	})
 
-	ps := []Book{
-		Book{
+	ps := []book{
+		book{
 			Name:  "Alice",
 			Type:  "travel",
 			Tags:  []string{"aa", "AA", "xyz"},
 			Level: 3,
 		},
-		Book{
+		book{
 			Name:  "Bible",
 			Type:  "dictionary",
 			Tags:  []string{"bb", "BB", "xyzz"},
 			Level: 5,
 		},
-		Book{
+		book{
 			Name:  "Cat",
 			Type:  "animal",
 			Tags:  []string{"cc", "CC", "xyz"},
@@ -990,15 +712,15 @@ func Test_queryMIndex(t *testing.T) {
 		return true
 	}
 
-	bookEqual := func(p1 Book, p2 Book) bool {
+	bookEqual := func(p1 book, p2 book) bool {
 		return p1.ID == p2.ID && p1.Name == p2.Name && p1.Type == p2.Type && cmpArray(p1.Tags, p2.Tags)
 	}
-	cmpResult := func(result []any, err error, pm map[uint64]Book) {
+	cmpResult := func(result []any, err error, pm map[uint64]book) {
 		if err != nil || len(result) != len(pm) {
 			t.Errorf("got query result fail %d %d", len(result), len(pm))
 		}
 		for i := range result {
-			p, _ := result[i].(*Book)
+			p, _ := result[i].(*book)
 			if !bookEqual(*p, pm[p.ID]) {
 				t.Errorf("not found id %d", p.ID)
 			}
@@ -1016,7 +738,7 @@ func Test_queryMIndex(t *testing.T) {
 	bdb.View(func(tx *buntdb.Tx) error {
 		p, _ := NewPoler(tx)
 		r, err := k.RangeQuery(p, rqi)
-		cmpResult(r, err, map[uint64]Book{ps[2].ID: ps[2]})
+		cmpResult(r, err, map[uint64]book{ps[2].ID: ps[2]})
 		return nil
 	})
 
@@ -1035,7 +757,7 @@ func Test_queryMIndex(t *testing.T) {
 	bdb.View(func(tx *buntdb.Tx) error {
 		p, _ := NewPoler(tx)
 		r, err := k.RangeQuery(p, rqi)
-		cmpResult(r, err, map[uint64]Book{ps[1].ID: ps[1]})
+		cmpResult(r, err, map[uint64]book{ps[1].ID: ps[1]})
 		return nil
 	})
 
@@ -1052,7 +774,7 @@ func Test_queryMIndex(t *testing.T) {
 		p, _ := NewPoler(tx)
 		r, err := k.RangeQuery(p, rqi)
 		fmt.Println(err, r, len(r))
-		cmpResult(r, err, map[uint64]Book{ps[0].ID: ps[0], ps[2].ID: ps[2]})
+		cmpResult(r, err, map[uint64]book{ps[0].ID: ps[0], ps[2].ID: ps[2]})
 		return nil
 	})
 
@@ -1071,7 +793,7 @@ func Test_queryMIndex(t *testing.T) {
 	bdb.View(func(tx *buntdb.Tx) error {
 		p, _ := NewPoler(tx)
 		r, err := k.RangeQuery(p, rqi)
-		cmpResult(r, err, map[uint64]Book{ps[1].ID: ps[1]})
+		cmpResult(r, err, map[uint64]book{ps[1].ID: ps[1]})
 		return nil
 	})
 
@@ -1086,7 +808,7 @@ func Test_queryMIndex(t *testing.T) {
 	bdb.View(func(tx *buntdb.Tx) error {
 		p, _ := NewPoler(tx)
 		r, err := k.Query(p, qi)
-		cmpResult(r, err, map[uint64]Book{ps[0].ID: ps[0], ps[2].ID: ps[2]})
+		cmpResult(r, err, map[uint64]book{ps[0].ID: ps[0], ps[2].ID: ps[2]})
 		return nil
 	})
 
@@ -1109,7 +831,7 @@ func Test_queryMIndex(t *testing.T) {
 	bdb.View(func(tx *buntdb.Tx) error {
 		p, _ := NewPoler(tx)
 		r, err := k.Query(p, qi)
-		cmpResult(r, err, map[uint64]Book{ps[0].ID: ps[0], ps[1].ID: ps[1], ps[2].ID: ps[2]})
+		cmpResult(r, err, map[uint64]book{ps[0].ID: ps[0], ps[1].ID: ps[1], ps[2].ID: ps[2]})
 		return nil
 	})
 
@@ -1132,46 +854,25 @@ func Test_queryMIndex(t *testing.T) {
 	bdb.View(func(tx *buntdb.Tx) error {
 		p, _ := NewPoler(tx)
 		r, err := k.Query(p, qi)
-		cmpResult(r, err, map[uint64]Book{ps[0].ID: ps[0], ps[1].ID: ps[1]})
+		cmpResult(r, err, map[uint64]book{ps[0].ID: ps[0], ps[1].ID: ps[1]})
 		return nil
 	})
 }
 
 func Test_nestBucket(t *testing.T) {
 
-	type Order struct {
-		ID     uint64
-		Type   string
-		Status uint16
-	}
-
-	valueEncode := func(obj any) ([]byte, error) {
-		var network bytes.Buffer // Stand-in for the network.
-		// Create an encoder and send a value.
-		enc := gob.NewEncoder(&network)
-
-		test, _ := obj.(*Order)
-		enc.Encode(test)
-
-		return network.Bytes(), nil
-	}
 	// generater value
 	valueDecode := func(b []byte, obj any) (any, error) {
 		r := bytes.NewReader(b)
 		dec := gob.NewDecoder(r)
-		test := &Order{}
+		test := &order2{}
 		dec.Decode(test)
 		return test, nil
 	}
 
-	pk_ID := func(obj any) ([]byte, error) {
-		test, _ := obj.(*Order)
-		return Bytes(Ptr(&test.ID), unsafe.Sizeof(test.ID)), nil
-	}
-
 	// generate key of idx_Type_Status
 	idx_Type_Status := func(obj interface{}) ([]byte, error) {
-		test, _ := obj.(*Order)
+		test, _ := obj.(*order2)
 		key := MakeIndexKey(make([]byte, 0, 20),
 			[]byte(test.Type),
 			Bytes(Ptr(&test.Status), unsafe.Sizeof(test.Status))) //every index should append primary key at end
@@ -1188,7 +889,6 @@ func Test_nestBucket(t *testing.T) {
 
 		kp := KVTParam{
 			Bucket:    mainBucket,
-			Marshal:   valueEncode,
 			Unmarshal: valueDecode,
 			Indexs: []Index{
 				{
@@ -1198,20 +898,16 @@ func Test_nestBucket(t *testing.T) {
 					},
 					idx_Type_Status,
 				},
-				{
-					&IndexInfo{Name: "pk_ID"},
-					pk_ID,
-				},
 			},
 		}
 
-		k, err := New(Order{}, &kp)
+		k, err := New(order2{}, &kp)
 		if err != nil {
 			t.Errorf("new kvt fail: %s", err)
 			return
 		}
 
-		od := Order{uint64(rand.Int63()), "book", 1}
+		od := order2{uint64(rand.Int63()), "book", 1}
 		bdb.Update(func(tx *buntdb.Tx) error {
 			p, _ := NewPoler(tx)
 			k.CreateDataBucket(p)
@@ -1236,7 +932,7 @@ func Test_nestBucket(t *testing.T) {
 				fmt.Println("query order fail:", mainBucket, idxBucket, err, len(r))
 				return fmt.Errorf("query order fail %s, %s", mainBucket, idxBucket)
 			}
-			o := r[0].(*Order)
+			o := r[0].(*order2)
 			if !reflect.DeepEqual(od, *o) {
 				t.Errorf("query order fail not equal")
 				fmt.Println("query order not equal: ", mainBucket, idxBucket, od, *o)
