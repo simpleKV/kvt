@@ -232,9 +232,9 @@ func (kvt *KVT) Query(db Poler, info QueryInfo) (result []any, err error) {
 }
 
 // get a full obj with its pk only
-func (kvt *KVT) Get(db Poler, obj any, dst any) (any, error) {
+func (kvt *KVT) Get(db Poler, obj KVer, dst any) (any, error) {
 
-	key, _ := kvt.pk.Key(obj)
+	key, _ := obj.Key()
 	oldByte, err := db.Get(kvt.path, key)
 
 	if err == nil || len(oldByte) == 0 {

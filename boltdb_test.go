@@ -17,27 +17,30 @@ import (
 	bolt "go.etcd.io/bbolt"
 )
 
+type Order struct {
+	ID       uint64
+	Type     string
+	Status   uint16
+	Name     string
+	District string
+	Num      int
+}
+
+func (obj *Order) Key() ([]byte, error) {
+	return Bytes(Ptr(&obj.ID), unsafe.Sizeof(obj.ID)), nil
+}
+
+func (obj *Order) Value() ([]byte, error) {
+	var network bytes.Buffer // Stand-in for the network.
+	// Create an encoder and send a value.
+	enc := gob.NewEncoder(&network)
+	enc.Encode(obj)
+
+	return network.Bytes(), nil
+}
+
 func Test_queryEqual(t *testing.T) {
 
-	type Order struct {
-		ID       uint64
-		Type     string
-		Status   uint16
-		Name     string
-		District string
-		Num      int
-	}
-
-	valueEncode := func(obj any) ([]byte, error) {
-		var network bytes.Buffer // Stand-in for the network.
-		// Create an encoder and send a value.
-		enc := gob.NewEncoder(&network)
-
-		test, _ := obj.(*Order)
-		enc.Encode(test)
-
-		return network.Bytes(), nil
-	}
 	// generater value
 	valueDecode := func(b []byte, obj any) (any, error) {
 		r := bytes.NewReader(b)
@@ -45,11 +48,6 @@ func Test_queryEqual(t *testing.T) {
 		test := &Order{}
 		dec.Decode(test)
 		return test, nil
-	}
-
-	pk_ID := func(obj any) ([]byte, error) {
-		test, _ := obj.(*Order)
-		return Bytes(Ptr(&test.ID), unsafe.Sizeof(test.ID)), nil
 	}
 
 	// generate key of idx_Type_Status
@@ -70,16 +68,11 @@ func Test_queryEqual(t *testing.T) {
 
 	kp := KVTParam{
 		Bucket:    "Bucket_Order",
-		Marshal:   valueEncode,
 		Unmarshal: valueDecode,
 		Indexs: []Index{
 			{
 				&IndexInfo{Name: "idx_Type_Status_District"},
 				idx_Type_Status_District,
-			},
-			{
-				&IndexInfo{Name: "pk_ID"},
-				pk_ID,
 			},
 		},
 	}
@@ -233,25 +226,6 @@ func Test_queryEqual(t *testing.T) {
 
 func Test_queryRange(t *testing.T) {
 
-	type Order struct {
-		ID       uint64
-		Type     string
-		Status   uint16
-		Name     string
-		District string
-		Num      int
-	}
-
-	valueEncode := func(obj any) ([]byte, error) {
-		var network bytes.Buffer // Stand-in for the network.
-		// Create an encoder and send a value.
-		enc := gob.NewEncoder(&network)
-
-		test, _ := obj.(*Order)
-		enc.Encode(test)
-
-		return network.Bytes(), nil
-	}
 	// generater value
 	valueDecode := func(b []byte, obj any) (any, error) {
 		r := bytes.NewReader(b)
@@ -259,11 +233,6 @@ func Test_queryRange(t *testing.T) {
 		test := &Order{}
 		dec.Decode(test)
 		return test, nil
-	}
-
-	pk_ID := func(obj any) ([]byte, error) {
-		test, _ := obj.(*Order)
-		return Bytes(Ptr(&test.ID), unsafe.Sizeof(test.ID)), nil
 	}
 
 	// generate key of idx_Type_Status
@@ -285,16 +254,11 @@ func Test_queryRange(t *testing.T) {
 
 	kp := KVTParam{
 		Bucket:    "Bucket_Order",
-		Marshal:   valueEncode,
 		Unmarshal: valueDecode,
 		Indexs: []Index{
 			{
 				&IndexInfo{Name: "idx_Type_Status_District"},
 				idx_Type_Status_District,
-			},
-			{
-				&IndexInfo{Name: "pk_ID"},
-				pk_ID,
 			},
 		},
 	}
@@ -487,24 +451,27 @@ func Test_queryRange(t *testing.T) {
 	})
 }
 
+type People struct {
+	ID    uint64
+	Name  string
+	Birth time.Time
+}
+
+func (obj *People) Key() ([]byte, error) {
+	return Bytes(Ptr(&obj.ID), unsafe.Sizeof(obj.ID)), nil
+}
+
+func (obj *People) Value() ([]byte, error) {
+	var network bytes.Buffer // Stand-in for the network.
+	// Create an encoder and send a value.
+	enc := gob.NewEncoder(&network)
+
+	enc.Encode(obj)
+
+	return network.Bytes(), nil
+}
+
 func Test_queryTimeRange(t *testing.T) {
-
-	type People struct {
-		ID    uint64
-		Name  string
-		Birth time.Time
-	}
-
-	valueEncode := func(obj any) ([]byte, error) {
-		var network bytes.Buffer // Stand-in for the network.
-		// Create an encoder and send a value.
-		enc := gob.NewEncoder(&network)
-
-		p, _ := obj.(*People)
-		enc.Encode(p)
-
-		return network.Bytes(), nil
-	}
 	// generater value
 	valueDecode := func(b []byte, obj any) (any, error) {
 		r := bytes.NewReader(b)
@@ -517,11 +484,6 @@ func Test_queryTimeRange(t *testing.T) {
 		}
 		dec.Decode(p)
 		return p, nil
-	}
-
-	pk_ID := func(obj any) ([]byte, error) {
-		p, _ := obj.(*People)
-		return Bytes(Ptr(&p.ID), unsafe.Sizeof(p.ID)), nil
 	}
 
 	// generate key of idx_Type_Status
@@ -540,16 +502,11 @@ func Test_queryTimeRange(t *testing.T) {
 
 	kp := KVTParam{
 		Bucket:    "Bucket_People",
-		Marshal:   valueEncode,
 		Unmarshal: valueDecode,
 		Indexs: []Index{
 			{
 				&IndexInfo{Name: "idx_Birth"},
 				idx_Birth,
-			},
-			{
-				&IndexInfo{Name: "pk_ID"},
-				pk_ID,
 			},
 		},
 	}
@@ -653,26 +610,29 @@ func Test_queryTimeRange(t *testing.T) {
 	})
 }
 
+type Book struct {
+	ID    uint64
+	Name  string
+	Type  string
+	Tags  []string
+	Level int
+}
+
+func (obj *Book) Key() ([]byte, error) {
+	return Bytes(Ptr(&obj.ID), unsafe.Sizeof(obj.ID)), nil
+}
+
+func (obj *Book) Value() ([]byte, error) {
+	var network bytes.Buffer // Stand-in for the network.
+	// Create an encoder and send a value.
+	enc := gob.NewEncoder(&network)
+	enc.Encode(obj)
+
+	return network.Bytes(), nil
+}
+
 func Test_queryMIndex(t *testing.T) {
 
-	type Book struct {
-		ID    uint64
-		Name  string
-		Type  string
-		Tags  []string
-		Level int
-	}
-
-	valueEncode := func(obj any) ([]byte, error) {
-		var network bytes.Buffer // Stand-in for the network.
-		// Create an encoder and send a value.
-		enc := gob.NewEncoder(&network)
-
-		p, _ := obj.(*Book)
-		enc.Encode(p)
-
-		return network.Bytes(), nil
-	}
 	// generater value
 	valueDecode := func(b []byte, obj any) (any, error) {
 		r := bytes.NewReader(b)
@@ -685,11 +645,6 @@ func Test_queryMIndex(t *testing.T) {
 		}
 		dec.Decode(p)
 		return p, nil
-	}
-
-	pk_ID := func(obj any) ([]byte, error) {
-		p, _ := obj.(*Book)
-		return Bytes(Ptr(&p.ID), unsafe.Sizeof(p.ID)), nil
 	}
 
 	// generate key of idx_Type
@@ -720,16 +675,11 @@ func Test_queryMIndex(t *testing.T) {
 
 	kp := KVTParam{
 		Bucket:    "Bucket_Book",
-		Marshal:   valueEncode,
 		Unmarshal: valueDecode,
 		Indexs: []Index{
 			{
 				&IndexInfo{Name: "Bucket_Book/idx_Type"},
 				idx_Type,
-			},
-			{
-				&IndexInfo{Name: "pk_ID"},
-				pk_ID,
 			},
 		},
 		MIndexs: []MIndex{
@@ -953,41 +903,37 @@ func Test_queryMIndex(t *testing.T) {
 	})
 }
 
-func Test_nestBucket(t *testing.T) {
+type Order2 struct {
+	ID     uint64
+	Type   string
+	Status uint16
+}
 
-	type Order struct {
-		ID     uint64
-		Type   string
-		Status uint16
-	}
+func (obj *Order2) Key() ([]byte, error) {
+	return Bytes(Ptr(&obj.ID), unsafe.Sizeof(obj.ID)), nil
+}
+func (obj *Order2) Value() ([]byte, error) {
+	var network bytes.Buffer // Stand-in for the network.
+	// Create an encoder and send a value.
+	enc := gob.NewEncoder(&network)
+	enc.Encode(obj)
 
-	valueEncode := func(obj any) ([]byte, error) {
-		var network bytes.Buffer // Stand-in for the network.
-		// Create an encoder and send a value.
-		enc := gob.NewEncoder(&network)
+	return network.Bytes(), nil
+}
 
-		test, _ := obj.(*Order)
-		enc.Encode(test)
-
-		return network.Bytes(), nil
-	}
+func Test_BucketPath(t *testing.T) {
 	// generater value
 	valueDecode := func(b []byte, obj any) (any, error) {
 		r := bytes.NewReader(b)
 		dec := gob.NewDecoder(r)
-		test := &Order{}
+		test := &Order2{}
 		dec.Decode(test)
 		return test, nil
 	}
 
-	pk_ID := func(obj any) ([]byte, error) {
-		test, _ := obj.(*Order)
-		return Bytes(Ptr(&test.ID), unsafe.Sizeof(test.ID)), nil
-	}
-
 	// generate key of idx_Type_Status
 	idx_Type_Status := func(obj interface{}) ([]byte, error) {
-		test, _ := obj.(*Order)
+		test, _ := obj.(*Order2)
 		key := MakeIndexKey(make([]byte, 0, 20),
 			[]byte(test.Type),
 			Bytes(Ptr(&test.Status), unsafe.Sizeof(test.Status))) //every index should append primary key at end
@@ -1004,7 +950,6 @@ func Test_nestBucket(t *testing.T) {
 
 		kp := KVTParam{
 			Bucket:    mainBucket,
-			Marshal:   valueEncode,
 			Unmarshal: valueDecode,
 			Indexs: []Index{
 				{
@@ -1013,10 +958,6 @@ func Test_nestBucket(t *testing.T) {
 						Fields: fields,
 					},
 					idx_Type_Status,
-				},
-				{
-					&IndexInfo{Name: "pk_ID"},
-					pk_ID,
 				},
 			},
 		}
@@ -1027,7 +968,7 @@ func Test_nestBucket(t *testing.T) {
 			return
 		}
 
-		od := Order{uint64(rand.Int63()), "book", 1}
+		od := Order2{uint64(rand.Int63()), "book", 1}
 		bdb.Update(func(tx *bolt.Tx) error {
 			p, _ := NewPoler(tx)
 			k.CreateDataBucket(p)
@@ -1052,7 +993,7 @@ func Test_nestBucket(t *testing.T) {
 				fmt.Println("query order fail:", mainBucket, idxBucket, err, len(r))
 				return fmt.Errorf("query order fail %s, %s", mainBucket, idxBucket)
 			}
-			o := r[0].(*Order)
+			o := r[0].(*Order2)
 			if !reflect.DeepEqual(od, *o) {
 				t.Errorf("query order fail not equal")
 				fmt.Println("query order not equal: ", mainBucket, idxBucket, od, *o)

@@ -14,8 +14,7 @@ type CompareFunc = func(d, v []byte) bool
 type FilterFunc = func(k []byte) bool
 type MIndexFunc = func(any) ([][]byte, error) //a index func return multi value
 
-// 3 index type: primary key; index, mindex
-const PKPrefix = "pk_"     //primay key name prefix
+// 2 index type index, mindex
 const IDXPrefix = "idx_"   //index name prefix
 const MIDXPrefix = "midx_" //mindex return multi index value from one field, it support  slice/array field
 
@@ -47,11 +46,14 @@ const errNewPolerFailed = "new poler failed, invalid db handler"
 
 const errDataNotFound = "data not found"
 
+type KVer interface {
+	Key() ([]byte, error)
+	Value() ([]byte, error)
+}
+
 type KVT struct {
 	bucket    string //bucket or table name
 	path      string //its parent path
-	pk        Index
-	marshal   IndexFunc
 	unmarshal DecodeFunc
 	indexs    map[string]Index //(indexName, *IDX)
 	mindexs   map[string]MIndex
@@ -76,11 +78,9 @@ type MIndex struct {
 
 type KVTParam struct {
 	Bucket    string     //bucket (with its paraent if exists), eg: "root/path/to/your/Bucket"
-	Marshal   IndexFunc  //generate value []byte
-	Unmarshal DecodeFunc //decode func to obj
-	//PK        Index      //generate primary key, merge into Indexs
-	Indexs  []Index //generate index
-	MIndexs []MIndex
+	Unmarshal DecodeFunc //unmarshal value bytes to a object
+	Indexs    []Index    //generate idx bucket's key
+	MIndexs   []MIndex
 }
 
 func parse(obj any) map[string]struct{} {
@@ -122,7 +122,7 @@ func makeIndexInfo(name string, fields, p []string) *IndexInfo {
 		fields := strings.Split(name, string(defaultIDXJoiner))
 		if len(fields) > 0 {
 			switch fields[0] + string(defaultIDXJoiner) {
-			case PKPrefix, IDXPrefix, MIDXPrefix:
+			case IDXPrefix, MIDXPrefix:
 				idx.Fields = append(idx.Fields, fields[1:]...)
 			}
 		}
@@ -148,11 +148,7 @@ func (kvt *KVT) saveIndexs(kp *KVTParam) error {
 		if err != nil {
 			return err
 		}
-		if strings.HasPrefix(name, PKPrefix) {
-			kvt.pk.IndexInfo = makeIndexInfo(name, kp.Indexs[i].Fields, []string{}) //pk path is same with main bucket
-			kvt.pk.Key = kp.Indexs[i].Key
-			continue
-		}
+
 		if _, ok := kvt.indexs[name]; ok {
 			return fmt.Errorf(errIndexConflict, name)
 		}
@@ -169,9 +165,6 @@ func (kvt *KVT) saveIndexs(kp *KVTParam) error {
 		p = append(p, path...)
 		p = append(p, name)
 		kvt.indexs[name] = Index{makeIndexInfo(name, kp.Indexs[i].Fields, p), kp.Indexs[i].Key}
-	}
-	if kvt.pk.Key == nil {
-		return fmt.Errorf(errIndexNotExist, "primary key")
 	}
 
 	//mindexs
@@ -210,11 +203,6 @@ func checkIndexFields(index *IndexInfo, allFields map[string]struct{}) error {
 }
 
 func (kvt *KVT) checkIndexsFields(allFields map[string]struct{}) error {
-	//PK
-	if err := checkIndexFields(kvt.pk.IndexInfo, allFields); err != nil {
-		return err
-	}
-
 	//index
 	for i := range kvt.indexs {
 		if err := checkIndexFields(kvt.indexs[i].IndexInfo, allFields); err != nil {
@@ -235,7 +223,6 @@ func (kvt *KVT) checkIndexsFields(allFields map[string]struct{}) error {
 func New(obj any, kp *KVTParam) (kvt *KVT, err error) {
 	kvt = &KVT{
 		bucket:    kp.Bucket,
-		marshal:   kp.Marshal,
 		unmarshal: kp.Unmarshal,
 	}
 
@@ -307,9 +294,9 @@ func (kvt *KVT) DeleteIndexBuckets(db Poler) error {
 	return nil
 }
 
-func (kvt *KVT) Put(db Poler, obj any) error {
-	key, _ := kvt.pk.Key(obj)
-	value, _ := kvt.marshal(obj)
+func (kvt *KVT) Put(db Poler, obj KVer) error {
+	key, _ := obj.Key()
+	value, _ := obj.Value()
 
 	old, err := db.Get(kvt.path, key)
 	if err != nil {
@@ -375,8 +362,8 @@ func (kvt *KVT) deleteMIndex(db Poler, obj any, pk []byte) error {
 	return nil
 }
 
-func (kvt *KVT) Delete(db Poler, obj any) error {
-	key, _ := kvt.pk.Key(obj)
+func (kvt *KVT) Delete(db Poler, obj KVer) error {
+	key, _ := obj.Key()
 	old, err := db.Get(kvt.path, key)
 	if err != nil || len(old) == 0 {
 		return err

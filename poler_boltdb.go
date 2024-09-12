@@ -28,7 +28,6 @@ func NewPoler(t any) (Poler, error) {
 // like that:  bkt_main/idx_Type
 func (this *boltdb) CreateBucket(path string) (prefix []byte, offset int, err error) {
 
-	fmt.Println("create bkt:", path)
 	if len(path) == 0 {
 		return prefix, offset, fmt.Errorf(errBucketOpenFailed, "empty bucket name")
 	}
