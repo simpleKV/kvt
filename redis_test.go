@@ -30,15 +30,6 @@ func Test_queryEqual(t *testing.T) {
 		return test, nil
 	}
 
-	// generate key of idx_Type_Status
-	idx_Type_Status_District := func(obj interface{}) ([]byte, error) {
-		test, _ := obj.(*order)
-		key := MakeIndexKey(make([]byte, 0, 20),
-			[]byte(test.Type),
-			Bytes(Ptr(&test.Status), unsafe.Sizeof(test.Status)),
-			[]byte(test.District)) //every index should append primary key at end
-		return key, nil
-	}
 	bdb := redis.NewClient(&redis.Options{
 		Addr:     "localhost:6379",
 		Password: "",
@@ -51,8 +42,8 @@ func Test_queryEqual(t *testing.T) {
 		Unmarshal: valueDecode,
 		Indexs: []Index{
 			{
-				&IndexInfo{Name: "Bucket_Order/idx_Type_Status_District"},
-				idx_Type_Status_District,
+				//&IndexInfo{Name: "Bucket_Order/idx_Type_Status_District"},
+				Key: idx_Type_Status_District,
 			},
 		},
 	}
@@ -64,7 +55,7 @@ func Test_queryEqual(t *testing.T) {
 	}
 
 	bdb.Del(ctx, kp.Bucket)
-	bdb.Del(ctx, kp.Indexs[0].Name)
+	bdb.Del(ctx, "Bucket_Order/idx_Type_Status_District")
 
 	_, err = bdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 		p := NewRedisPoler(bdb, pipe, ctx)

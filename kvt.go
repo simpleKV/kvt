@@ -44,6 +44,8 @@ const errCompareOperatorInvalid = "compare operator [%s] is invalid"
 
 const errNewPolerFailed = "new poler failed, invalid db handler"
 
+const errIndexFunctionNotFound = "index function not found"
+
 const errDataNotFound = "data not found"
 
 type KVer interface {
@@ -144,8 +146,19 @@ func (kvt *KVT) saveIndexs(kp *KVTParam) error {
 	//indexs
 	kvt.indexs = make(map[string]Index, len(kp.Indexs))
 	for i := range kp.Indexs {
-		name, path, err := splitPath(kp.Indexs[i].Name)
-		if err != nil {
+		if kp.Indexs[i].Key == nil {
+			return fmt.Errorf(errIndexFunctionNotFound)
+		}
+		iname := getFunctionName(kp.Indexs[i].Key)
+		fields := []string{}
+		if kp.Indexs[i].IndexInfo != nil {
+			fields = kp.Indexs[i].Fields[:]
+			if len(kp.Indexs[i].Name) > 0 {
+				iname = kp.Indexs[i].Name
+			}
+		}
+		name, path, err := splitPath(iname)
+		if err != nil || len(name) == 0 {
 			return err
 		}
 
@@ -156,7 +169,8 @@ func (kvt *KVT) saveIndexs(kp *KVTParam) error {
 		//here we add prefix main bucket name as idx path
 		//for a idx like "idx_Type" is very possible conflict
 		//with another objects's "idx_Type"
-		if (len(path) > 0 && path[0] == kvt.bucket) || (len(path) == 0 && len(kp.Indexs[i].Fields) == 0) {
+		if (len(path) > 0 && path[0] == kvt.bucket) ||
+			len(path) == 0 && len(fields) == 0 {
 			p = append(p, mainPath...)
 			if len(path) == 0 {
 				p = append(p, kvt.bucket)
@@ -164,7 +178,7 @@ func (kvt *KVT) saveIndexs(kp *KVTParam) error {
 		}
 		p = append(p, path...)
 		p = append(p, name)
-		kvt.indexs[name] = Index{makeIndexInfo(name, kp.Indexs[i].Fields, p), kp.Indexs[i].Key}
+		kvt.indexs[name] = Index{makeIndexInfo(name, fields, p), kp.Indexs[i].Key}
 	}
 
 	//mindexs

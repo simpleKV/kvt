@@ -1,6 +1,9 @@
 package kvt
 
 import (
+	"reflect"
+	"runtime"
+	"strings"
 	"unsafe"
 )
 
@@ -102,5 +105,23 @@ func doSplitIndexKey(escaper, token byte, content []byte, key []byte, result [][
 			}
 		}
 		return doSplitIndexKey(escaper, token, content[len(content)-1:], key, result)
+	}
+}
+
+func getFunctionName(i any) string {
+	return basename(runtime.FuncForPC(reflect.ValueOf(i).Pointer()).Name())
+}
+
+// packageName.functiong -> function
+func basename(str string) string {
+
+	i := strings.LastIndexByte(str, '.')
+	switch i {
+	case -1:
+		return str
+	case len(str) - 1:
+		return ""
+	default:
+		return str[i+1:]
 	}
 }

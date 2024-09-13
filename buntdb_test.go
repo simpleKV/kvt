@@ -27,15 +27,6 @@ func Test_queryEqual(t *testing.T) {
 		return test, nil
 	}
 
-	// generate key of idx_Type_Status
-	idx_Type_Status_District := func(obj interface{}) ([]byte, error) {
-		test, _ := obj.(*order)
-		key := MakeIndexKey(make([]byte, 0, 20),
-			[]byte(test.Type),
-			Bytes(Ptr(&test.Status), unsafe.Sizeof(test.Status)),
-			[]byte(test.District)) //every index should append primary key at end
-		return key, nil
-	}
 	os.Remove("query_test.bdb")
 	bdb, err := buntdb.Open("query_test.bdb")
 	if err != nil {
@@ -48,8 +39,8 @@ func Test_queryEqual(t *testing.T) {
 		Unmarshal: valueDecode,
 		Indexs: []Index{
 			{
-				&IndexInfo{Name: "Bucket_order/idx_Type_Status_District"},
-				idx_Type_Status_District,
+				//&IndexInfo{Name: "Bucket_order/idx_Type_Status_District"},
+				Key: idx_Type_Status_District,
 			},
 		},
 	}

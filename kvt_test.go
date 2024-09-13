@@ -29,6 +29,15 @@ func (obj *order) Value() ([]byte, error) {
 	return network.Bytes(), nil
 }
 
+func idx_Type_Status_District(obj any) ([]byte, error) {
+	test, _ := obj.(*order)
+	key := MakeIndexKey(make([]byte, 0, 20),
+		[]byte(test.Type),
+		Bytes(Ptr(&test.Status), unsafe.Sizeof(test.Status)),
+		[]byte(test.District)) //every index should append primary key at end
+	return key, nil
+}
+
 type people struct {
 	ID    uint64
 	Name  string
