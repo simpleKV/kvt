@@ -22,7 +22,7 @@ var ctx = context.Background()
 func Test_queryEqual(t *testing.T) {
 
 	// generater value
-	valueDecode := func(b []byte, obj any) (any, error) {
+	valueDecode := func(b []byte, obj KVer) (KVer, error) {
 		r := bytes.NewReader(b)
 		dec := gob.NewDecoder(r)
 		test := &order{}
@@ -40,11 +40,8 @@ func Test_queryEqual(t *testing.T) {
 	kp := KVTParam{
 		Bucket:    "Bucket_Order",
 		Unmarshal: valueDecode,
-		Indexs: []Index{
-			{
-				//&IndexInfo{Name: "Bucket_Order/idx_Type_Status_District"},
-				Key: idx_Type_Status_District,
-			},
+		Indexs: []IndexInfo{
+			{Name: "Bucket_Order/idx_Type_Status_District"},
 		},
 	}
 
@@ -195,22 +192,12 @@ func Test_queryEqual(t *testing.T) {
 
 func Test_queryRange(t *testing.T) {
 	// generater value
-	valueDecode := func(b []byte, obj any) (any, error) {
+	valueDecode := func(b []byte, obj KVer) (KVer, error) {
 		r := bytes.NewReader(b)
 		dec := gob.NewDecoder(r)
 		test := &order{}
 		dec.Decode(test)
 		return test, nil
-	}
-
-	// generate key of idx_Type_Status
-	idx_Type_Status_District := func(obj interface{}) ([]byte, error) {
-		test, _ := obj.(*order)
-		key := MakeIndexKey(make([]byte, 0, 20),
-			[]byte(test.Type),
-			Bytes(Ptr(&test.Status), unsafe.Sizeof(test.Status)),
-			[]byte(test.District)) //every index should append primary key at end
-		return key, nil
 	}
 
 	bdb := redis.NewClient(&redis.Options{
@@ -223,11 +210,8 @@ func Test_queryRange(t *testing.T) {
 	kp := KVTParam{
 		Bucket:    "Bucket_Order",
 		Unmarshal: valueDecode,
-		Indexs: []Index{
-			{
-				&IndexInfo{Name: "idx_Type_Status_District"},
-				idx_Type_Status_District,
-			},
+		Indexs: []IndexInfo{
+			{Name: "idx_Type_Status_District"},
 		},
 	}
 
@@ -405,7 +389,7 @@ func Test_queryRange(t *testing.T) {
 
 func Test_queryTimeRange(t *testing.T) {
 	// generater value
-	valueDecode := func(b []byte, obj any) (any, error) {
+	valueDecode := func(b []byte, obj KVer) (KVer, error) {
 		r := bytes.NewReader(b)
 		dec := gob.NewDecoder(r)
 		var p *people
@@ -417,13 +401,7 @@ func Test_queryTimeRange(t *testing.T) {
 		dec.Decode(p)
 		return p, nil
 	}
-	// generate key of idx_Type_Status
-	idx_Birth := func(obj interface{}) ([]byte, error) {
-		p, _ := obj.(*people)
-		key := MakeIndexKey(make([]byte, 0, 20),
-			[]byte(p.Birth.Format(time.RFC3339))) //every index should append primary key at end
-		return key, nil
-	}
+
 	bdb := redis.NewClient(&redis.Options{
 		Addr:     "localhost:6379",
 		Password: "",
@@ -434,11 +412,8 @@ func Test_queryTimeRange(t *testing.T) {
 	kp := KVTParam{
 		Bucket:    "Bucket_People",
 		Unmarshal: valueDecode,
-		Indexs: []Index{
-			{
-				&IndexInfo{Name: "idx_Birth"},
-				idx_Birth,
-			},
+		Indexs: []IndexInfo{
+			{Name: "idx_Birth"},
 		},
 	}
 
@@ -541,7 +516,7 @@ func Test_queryTimeRange(t *testing.T) {
 func Test_queryMIndex(t *testing.T) {
 
 	// generater value
-	valueDecode := func(b []byte, obj any) (any, error) {
+	valueDecode := func(b []byte, obj KVer) (KVer, error) {
 		r := bytes.NewReader(b)
 		dec := gob.NewDecoder(r)
 		var p *book
@@ -552,14 +527,6 @@ func Test_queryMIndex(t *testing.T) {
 		}
 		dec.Decode(p)
 		return p, nil
-	}
-
-	// generate key of idx_Type
-	idx_Type := func(obj interface{}) ([]byte, error) {
-		p, _ := obj.(*book)
-		key := MakeIndexKey(make([]byte, 0, 20),
-			[]byte(p.Type)) //every index should append primary key at end
-		return key, nil
 	}
 
 	midx_Level_Tag := func(obj interface{}) (ret [][]byte, err error) {
@@ -583,11 +550,8 @@ func Test_queryMIndex(t *testing.T) {
 	kp := KVTParam{
 		Bucket:    "Bucket_Book",
 		Unmarshal: valueDecode,
-		Indexs: []Index{
-			{
-				&IndexInfo{Name: "Bucket_Book/idx_Type"},
-				idx_Type,
-			},
+		Indexs: []IndexInfo{
+			{Name: "Bucket_Book/idx_Type"},
 		},
 		MIndexs: []MIndex{
 			{
@@ -794,7 +758,7 @@ func Test_queryMIndex(t *testing.T) {
 
 func Test_BucketPath(t *testing.T) {
 	// generater value
-	valueDecode := func(b []byte, obj any) (any, error) {
+	valueDecode := func(b []byte, obj KVer) (KVer, error) {
 		r := bytes.NewReader(b)
 		dec := gob.NewDecoder(r)
 		test := &order2{}
@@ -802,14 +766,6 @@ func Test_BucketPath(t *testing.T) {
 		return test, nil
 	}
 
-	// generate key of idx_Type_Status
-	idx_Type_Status := func(obj interface{}) ([]byte, error) {
-		test, _ := obj.(*order2)
-		key := MakeIndexKey(make([]byte, 0, 20),
-			[]byte(test.Type),
-			Bytes(Ptr(&test.Status), unsafe.Sizeof(test.Status))) //every index should append primary key at end
-		return key, nil
-	}
 	bdb := redis.NewClient(&redis.Options{
 		Addr:     "localhost:6379",
 		Password: "",
@@ -822,13 +778,10 @@ func Test_BucketPath(t *testing.T) {
 		kp := KVTParam{
 			Bucket:    mainBucket,
 			Unmarshal: valueDecode,
-			Indexs: []Index{
+			Indexs: []IndexInfo{
 				{
-					&IndexInfo{
-						Name:   idxBucket,
-						Fields: fields,
-					},
-					idx_Type_Status,
+					Name:   idxBucket,
+					Fields: fields,
 				},
 			},
 		}
