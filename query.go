@@ -108,7 +108,7 @@ func (kvt *KVT) getIndexInfo(name string) (index *IndexInfo, err error) {
 		if !ok {
 			return nil, fmt.Errorf(errIndexNotExist, name)
 		}
-		return v.IndexInfo, nil
+		return v, nil
 	case strings.HasPrefix(name, MIDXPrefix):
 		v, ok := kvt.mindexs[name]
 		if !ok {
@@ -232,7 +232,7 @@ func (kvt *KVT) Query(db Poler, info QueryInfo) (result []any, err error) {
 }
 
 // get a full obj with its pk only
-func (kvt *KVT) Get(db Poler, obj KVer, dst any) (any, error) {
+func (kvt *KVT) Get(db Poler, obj KVer, dst KVer) (KVer, error) {
 
 	key, _ := obj.Key()
 	oldByte, err := db.Get(kvt.path, key)

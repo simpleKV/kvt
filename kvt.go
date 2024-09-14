@@ -9,7 +9,7 @@ import (
 
 type IndexFunc = func(any) ([]byte, error)
 type EncodeFunc = func(any) ([]byte, error)
-type DecodeFunc = func([]byte, any) (any, error)
+type DecodeFunc = func([]byte, KVer) (KVer, error)
 type CompareFunc = func(d, v []byte) bool
 type FilterFunc = func(k []byte) bool
 type MIndexFunc = func(any) ([][]byte, error) //a index func return multi value
@@ -51,13 +51,14 @@ const errDataNotFound = "data not found"
 type KVer interface {
 	Key() ([]byte, error)
 	Value() ([]byte, error)
+	Index(string) ([]byte, error)
 }
 
 type KVT struct {
 	bucket    string //bucket or table name
 	path      string //its parent path
 	unmarshal DecodeFunc
-	indexs    map[string]Index //(indexName, *IDX)
+	indexs    map[string]*IndexInfo //(indexName, *IDX)
 	mindexs   map[string]MIndex
 }
 
@@ -68,20 +69,15 @@ type IndexInfo struct {
 	offset int      //some kv db doesn't support bucket, so add bucket name in the key, it's a bucket prefix offset
 }
 
-type Index struct {
-	*IndexInfo
-	Key IndexFunc //generate index bucket's key, value is the pk
-}
-
 type MIndex struct {
 	*IndexInfo
 	Key MIndexFunc //generate index multi key, value is the pk
 }
 
 type KVTParam struct {
-	Bucket    string     //bucket (with its paraent if exists), eg: "root/path/to/your/Bucket"
-	Unmarshal DecodeFunc //unmarshal value bytes to a object
-	Indexs    []Index    //generate idx bucket's key
+	Bucket    string      //bucket (with its paraent if exists), eg: "root/path/to/your/Bucket"
+	Unmarshal DecodeFunc  //unmarshal value bytes to a object
+	Indexs    []IndexInfo //generate idx bucket's key
 	MIndexs   []MIndex
 }
 
@@ -144,20 +140,9 @@ func (kvt *KVT) saveIndexs(kp *KVTParam) error {
 	kvt.path = kp.Bucket
 
 	//indexs
-	kvt.indexs = make(map[string]Index, len(kp.Indexs))
+	kvt.indexs = make(map[string]*IndexInfo, len(kp.Indexs))
 	for i := range kp.Indexs {
-		if kp.Indexs[i].Key == nil {
-			return fmt.Errorf(errIndexFunctionNotFound)
-		}
-		iname := getFunctionName(kp.Indexs[i].Key)
-		fields := []string{}
-		if kp.Indexs[i].IndexInfo != nil {
-			fields = kp.Indexs[i].Fields[:]
-			if len(kp.Indexs[i].Name) > 0 {
-				iname = kp.Indexs[i].Name
-			}
-		}
-		name, path, err := splitPath(iname)
+		name, path, err := splitPath(kp.Indexs[i].Name)
 		if err != nil || len(name) == 0 {
 			return err
 		}
@@ -170,7 +155,7 @@ func (kvt *KVT) saveIndexs(kp *KVTParam) error {
 		//for a idx like "idx_Type" is very possible conflict
 		//with another objects's "idx_Type"
 		if (len(path) > 0 && path[0] == kvt.bucket) ||
-			len(path) == 0 && len(fields) == 0 {
+			len(path) == 0 && len(kp.Indexs[i].Fields) == 0 {
 			p = append(p, mainPath...)
 			if len(path) == 0 {
 				p = append(p, kvt.bucket)
@@ -178,7 +163,7 @@ func (kvt *KVT) saveIndexs(kp *KVTParam) error {
 		}
 		p = append(p, path...)
 		p = append(p, name)
-		kvt.indexs[name] = Index{makeIndexInfo(name, fields, p), kp.Indexs[i].Key}
+		kvt.indexs[name] = makeIndexInfo(name, kp.Indexs[i].Fields, p)
 	}
 
 	//mindexs
@@ -219,7 +204,7 @@ func checkIndexFields(index *IndexInfo, allFields map[string]struct{}) error {
 func (kvt *KVT) checkIndexsFields(allFields map[string]struct{}) error {
 	//index
 	for i := range kvt.indexs {
-		if err := checkIndexFields(kvt.indexs[i].IndexInfo, allFields); err != nil {
+		if err := checkIndexFields(kvt.indexs[i], allFields); err != nil {
 			return err
 		}
 	}
@@ -323,8 +308,8 @@ func (kvt *KVT) Put(db Poler, obj KVer) error {
 			return err
 		}
 		for i := range kvt.indexs {
-			kold, _ := kvt.indexs[i].Key(oldObj)
-			knew, _ := kvt.indexs[i].Key(obj)
+			kold, _ := oldObj.Index(kvt.indexs[i].Name)
+			knew, _ := obj.Index(kvt.indexs[i].Name)
 			if bytes.Equal(kold, knew) {
 				continue
 			}
@@ -342,8 +327,8 @@ func (kvt *KVT) Put(db Poler, obj KVer) error {
 	} else { //insert new index, and point to the primary key
 
 		for i := range kvt.indexs {
-			ik, _ := kvt.indexs[i].Key(obj) //index key
-			ik = AppendLastKey(ik, key)     //index key should append primary key, to make sure it unique
+			ik, _ := obj.Index(kvt.indexs[i].Name)
+			ik = AppendLastKey(ik, key) //index key should append primary key, to make sure it unique
 			if err := db.Put(kvt.indexs[i].path, ik, key); err != nil {
 				return err
 			}
@@ -388,7 +373,7 @@ func (kvt *KVT) Delete(db Poler, obj KVer) error {
 		return err
 	}
 	for i := range kvt.indexs {
-		kold, _ := kvt.indexs[i].Key(oldObj)
+		kold, _ := oldObj.Index(kvt.indexs[i].Name)
 		kold = AppendLastKey(kold, key)
 		if err := db.Delete(kvt.indexs[i].path, kold); err != nil {
 			return err
