@@ -4,9 +4,7 @@
 package kvt
 
 import (
-	"bytes"
 	"context"
-	"encoding/gob"
 	"fmt"
 	"math/rand"
 	"reflect"
@@ -236,15 +234,6 @@ func Test_crud(t *testing.T) {
 
 func Test_queryEqual(t *testing.T) {
 
-	// generater value
-	valueDecode := func(b []byte, obj KVer) (KVer, error) {
-		r := bytes.NewReader(b)
-		dec := gob.NewDecoder(r)
-		test := &order{}
-		dec.Decode(test)
-		return test, nil
-	}
-
 	bdb := redis.NewClient(&redis.Options{
 		Addr:     "localhost:6379",
 		Password: "",
@@ -254,7 +243,7 @@ func Test_queryEqual(t *testing.T) {
 
 	kp := KVTParam{
 		Bucket:    "Bucket_Order",
-		Unmarshal: valueDecode,
+		Unmarshal: orderUnmarshal,
 		Indexs: []IndexInfo{
 			{Name: "Bucket_Order/idx_Type_Status_District"},
 		},
@@ -406,14 +395,6 @@ func Test_queryEqual(t *testing.T) {
 }
 
 func Test_queryRange(t *testing.T) {
-	// generater value
-	valueDecode := func(b []byte, obj KVer) (KVer, error) {
-		r := bytes.NewReader(b)
-		dec := gob.NewDecoder(r)
-		test := &order{}
-		dec.Decode(test)
-		return test, nil
-	}
 
 	bdb := redis.NewClient(&redis.Options{
 		Addr:     "localhost:6379",
@@ -424,7 +405,7 @@ func Test_queryRange(t *testing.T) {
 
 	kp := KVTParam{
 		Bucket:    "Bucket_Order",
-		Unmarshal: valueDecode,
+		Unmarshal: orderUnmarshal,
 		Indexs: []IndexInfo{
 			{Name: "idx_Type_Status_District"},
 		},
@@ -603,19 +584,6 @@ func Test_queryRange(t *testing.T) {
 }
 
 func Test_queryTimeRange(t *testing.T) {
-	// generater value
-	valueDecode := func(b []byte, obj KVer) (KVer, error) {
-		r := bytes.NewReader(b)
-		dec := gob.NewDecoder(r)
-		var p *people
-		if obj != nil {
-			p = obj.(*people)
-		} else {
-			p = &people{}
-		}
-		dec.Decode(p)
-		return p, nil
-	}
 
 	bdb := redis.NewClient(&redis.Options{
 		Addr:     "localhost:6379",
@@ -626,7 +594,7 @@ func Test_queryTimeRange(t *testing.T) {
 
 	kp := KVTParam{
 		Bucket:    "Bucket_People",
-		Unmarshal: valueDecode,
+		Unmarshal: peopleUnmarshal,
 		Indexs: []IndexInfo{
 			{Name: "idx_Birth"},
 		},
@@ -730,20 +698,6 @@ func Test_queryTimeRange(t *testing.T) {
 
 func Test_queryMIndex(t *testing.T) {
 
-	// generater value
-	valueDecode := func(b []byte, obj KVer) (KVer, error) {
-		r := bytes.NewReader(b)
-		dec := gob.NewDecoder(r)
-		var p *book
-		if obj != nil {
-			p = obj.(*book)
-		} else {
-			p = &book{}
-		}
-		dec.Decode(p)
-		return p, nil
-	}
-
 	midx_Level_Tag := func(obj interface{}) (ret [][]byte, err error) {
 		p, _ := obj.(*book)
 		for i := range p.Tags {
@@ -764,7 +718,7 @@ func Test_queryMIndex(t *testing.T) {
 
 	kp := KVTParam{
 		Bucket:    "Bucket_Book",
-		Unmarshal: valueDecode,
+		Unmarshal: bookUnmarshal,
 		Indexs: []IndexInfo{
 			{Name: "Bucket_Book/idx_Type"},
 		},
@@ -972,14 +926,6 @@ func Test_queryMIndex(t *testing.T) {
 }
 
 func Test_BucketPath(t *testing.T) {
-	// generater value
-	valueDecode := func(b []byte, obj KVer) (KVer, error) {
-		r := bytes.NewReader(b)
-		dec := gob.NewDecoder(r)
-		test := &order2{}
-		dec.Decode(test)
-		return test, nil
-	}
 
 	bdb := redis.NewClient(&redis.Options{
 		Addr:     "localhost:6379",
@@ -992,7 +938,7 @@ func Test_BucketPath(t *testing.T) {
 
 		kp := KVTParam{
 			Bucket:    mainBucket,
-			Unmarshal: valueDecode,
+			Unmarshal: order2Unmarshal,
 			Indexs: []IndexInfo{
 				{
 					Name:   idxBucket,

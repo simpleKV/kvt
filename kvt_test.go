@@ -17,21 +17,20 @@ type order struct {
 	Num      int
 }
 
-// generater value
+// unmarshal []byte to order object
 func orderUnmarshal(b []byte, obj KVer) (KVer, error) {
 	r := bytes.NewReader(b)
 	dec := gob.NewDecoder(r)
-	var test *order
-	if obj != nil {
-		test = obj.(*order)
-	} else {
+
+	test, ok := obj.(*order)
+	if !ok {
 		test = new(order)
 	}
 	err := dec.Decode(test)
 	if err != nil {
-		fmt.Println("orderUnmarshal err: ", err)
+		return nil, err
 	}
-	return test, err
+	return test, nil
 }
 
 func (obj *order) Key() ([]byte, error) {
@@ -47,8 +46,7 @@ func (obj *order) Value() ([]byte, error) {
 	return network.Bytes(), nil
 }
 
-// produce a primary key(pk) from a Order object,
-// save  in the main bucket like that (pk(return by order_pk_ID),  value(return by order_valueEncode))
+// generate index bucket's key by index name
 func (this *order) Index(name string) ([]byte, error) {
 	switch name {
 	case "idx_Type_Status_District":
@@ -77,6 +75,20 @@ type people struct {
 	ID    uint64
 	Name  string
 	Birth time.Time
+}
+
+func peopleUnmarshal(b []byte, obj KVer) (KVer, error) {
+	r := bytes.NewReader(b)
+	dec := gob.NewDecoder(r)
+
+	p, ok := obj.(*people)
+	if !ok {
+		p = new(people)
+	}
+	if err := dec.Decode(p); err != nil {
+		return nil, err
+	}
+	return p, nil
 }
 
 func (obj *people) Key() ([]byte, error) {
@@ -117,6 +129,20 @@ type book struct {
 	Level int
 }
 
+func bookUnmarshal(b []byte, obj KVer) (KVer, error) {
+	r := bytes.NewReader(b)
+	dec := gob.NewDecoder(r)
+
+	p, ok := obj.(*book)
+	if !ok {
+		p = new(book)
+	}
+	if err := dec.Decode(p); err != nil {
+		return nil, err
+	}
+	return p, nil
+}
+
 func (obj *book) Key() ([]byte, error) {
 	return Bytes(Ptr(&obj.ID), unsafe.Sizeof(obj.ID)), nil
 }
@@ -139,7 +165,6 @@ func (obj *book) Index(name string) ([]byte, error) {
 	}
 }
 
-// generate key of idx_Type
 func (obj *book) idx_Type() ([]byte, error) {
 	key := MakeIndexKey(make([]byte, 0, 20),
 		[]byte(obj.Type)) //every index should append primary key at end
@@ -152,9 +177,23 @@ type order2 struct {
 	Status uint16
 }
 
+func order2Unmarshal(b []byte, obj KVer) (KVer, error) {
+	r := bytes.NewReader(b)
+	dec := gob.NewDecoder(r)
+	test, ok := obj.(*order2)
+	if !ok {
+		test = new(order2)
+	}
+	if err := dec.Decode(test); err != nil {
+		return nil, err
+	}
+	return test, nil
+}
+
 func (obj *order2) Key() ([]byte, error) {
 	return Bytes(Ptr(&obj.ID), unsafe.Sizeof(obj.ID)), nil
 }
+
 func (obj *order2) Value() ([]byte, error) {
 	var network bytes.Buffer // Stand-in for the network.
 	// Create an encoder and send a value.
@@ -166,7 +205,6 @@ func (obj *order2) Value() ([]byte, error) {
 
 // order2 is for test bucket path, only 1 index idx_Type_Status
 func (obj *order2) Index(name string) ([]byte, error) {
-	fmt.Println("order2 Index ", name)
 	return obj.idx_Type_Status()
 }
 
