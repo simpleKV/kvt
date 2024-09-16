@@ -17,6 +17,249 @@ import (
 	bolt "go.etcd.io/bbolt"
 )
 
+func Test_crud(t *testing.T) {
+	os.Remove("query_test.bdb")
+	bdb, err := bolt.Open("query_test.bdb", 0600, nil)
+	if err != nil {
+		return
+	}
+	defer bdb.Close()
+
+	kp := KVTParam{
+		Bucket:    "Bucket_Order",
+		Unmarshal: orderUnmarshal,
+		Indexs: []IndexInfo{
+			{Name: "idx_Type_Status_District",
+				Fields: []string{"Type", "Status", "District"},
+			},
+			{Name: "idx_Status"},
+		},
+	}
+
+	k, err := New(order{}, &kp)
+	if err != nil {
+		t.Errorf("new kvt fail: %s", err)
+		return
+	}
+
+	bdb.Update(func(tx *bolt.Tx) error {
+		p, _ := NewPoler(tx)
+		k.CreateDataBucket(p)
+		k.SetSequence(p, 1000)
+		k.CreateIndexBuckets(p)
+		return nil
+	})
+
+	odInputs := []order{
+		order{
+			Type:     "book",
+			Status:   1,
+			Name:     "Alice",
+			District: "East ST",
+		},
+		order{
+			Type:     "fruit",
+			Status:   2,
+			Name:     "Bob",
+			District: "South ST",
+		},
+	}
+
+	//create
+	bdb.Update(func(tx *bolt.Tx) error {
+		p, _ := NewPoler(tx)
+		for i := range odInputs {
+			odInputs[i].ID, _ = k.NextSequence(p)
+			fmt.Println("put ", odInputs[i])
+			if err = k.Put(p, &odInputs[i]); err != nil {
+				t.Errorf("put kvt fail: %s", err)
+				return err
+			}
+		}
+		return nil
+	})
+
+	printBkt := func(bkt string) {
+		bdb.View(func(tx *bolt.Tx) error {
+
+			c := tx.Bucket([]byte(bkt)).Cursor()
+
+			for k, v := c.First(); k != nil; k, v = c.Next() {
+				fmt.Println("ptintBKT: k", k, "v", v)
+			}
+			return nil
+		})
+	}
+
+	cmpResult := func(result []any, err error, ords map[uint64]order) {
+		fmt.Println("crud err:", err, "len result:", len(result), len(ords))
+		if err != nil || len(result) != len(ords) {
+			t.Errorf("got query result fail")
+		}
+		for i := range result {
+			odd, _ := result[i].(*order)
+			fmt.Println("cmp:", odd, ords[odd.ID])
+			if !reflect.DeepEqual(*odd, ords[odd.ID]) {
+				t.Errorf("not found id %d", odd.ID)
+				fmt.Println("odd:", odd)
+			}
+		}
+	}
+
+	bdb.View(func(tx *bolt.Tx) error {
+		p, _ := NewPoler(tx)
+
+		printBkt("Bucket_Order")
+		r, err := k.Gets(p, nil)
+		cmpResult(r, err, map[uint64]order{odInputs[1].ID: odInputs[1], odInputs[0].ID: odInputs[0]})
+
+		r, err = k.Gets(p, []byte{})
+		cmpResult(r, err, map[uint64]order{odInputs[1].ID: odInputs[1], odInputs[0].ID: odInputs[0]})
+
+		var out order
+		r1, _ := k.Get(p, &odInputs[1], &out)
+		if !reflect.DeepEqual(odInputs[1], out) {
+			fmt.Println("curd:", odInputs[1], out)
+			t.Errorf("not found id %d", odInputs[1].ID)
+		}
+		if !reflect.DeepEqual(odInputs[1], *(r1.(*order))) {
+			fmt.Println("curd:", odInputs[1], *(r1.(*order)))
+			t.Errorf("not found id2 %d", odInputs[1].ID)
+		}
+
+		return nil
+	})
+
+	qi := QueryInfo{
+		IndexName: "idx_Type_Status_District",
+		Where: map[string][]byte{
+			"Type": []byte(odInputs[0].Type),
+			//"Status":   Bytes(Ptr(&odInputs[1].Status), unsafe.Sizeof(odInputs[1].Status)),
+			//"District": []byte(odInputs[1].District),
+		},
+	}
+	bdb.View(func(tx *bolt.Tx) error {
+		p, _ := NewPoler(tx)
+		r, err := k.Query(p, qi)
+		cmpResult(r, err, map[uint64]order{odInputs[0].ID: odInputs[0]})
+		return nil
+	})
+
+	//update type and name
+	bdb.Update(func(tx *bolt.Tx) error {
+		p, _ := NewPoler(tx)
+		odInputs[0].Type = odInputs[1].Type
+		odInputs[0].Name = "Jack"
+		k.Put(p, &odInputs[0])
+		return nil
+	})
+	//query again, should got 2
+	qi = QueryInfo{
+		IndexName: "idx_Type_Status_District",
+		Where: map[string][]byte{
+			"Type": []byte(odInputs[0].Type),
+			//"Status":   Bytes(Ptr(&odInputs[1].Status), unsafe.Sizeof(odInputs[1].Status)),
+			//"District": []byte(odInputs[1].District),
+		},
+	}
+	bdb.View(func(tx *bolt.Tx) error {
+		p, _ := NewPoler(tx)
+		r, err := k.Query(p, qi)
+		cmpResult(r, err, map[uint64]order{odInputs[1].ID: odInputs[1], odInputs[0].ID: odInputs[0]})
+		return nil
+	})
+
+	s0, s1 := odInputs[0].Status, odInputs[1].Status
+	qi = QueryInfo{
+		IndexName: "idx_Status",
+		Where: map[string][]byte{
+			"Status": Bytes(Ptr(&s1), unsafe.Sizeof(s1)),
+			//"District": []byte(odInputs[1].District),
+		},
+	}
+	q2 := QueryInfo{
+		IndexName: "idx_Type_Status_District",
+		Where: map[string][]byte{
+			"Type":   []byte(odInputs[1].Type),
+			"Status": Bytes(Ptr(&s1), unsafe.Sizeof(s1)),
+			//"District": []byte(odInputs[1].District),
+		},
+	}
+	bdb.View(func(tx *bolt.Tx) error {
+		p, _ := NewPoler(tx)
+		r, err := k.Query(p, qi)
+		cmpResult(r, err, map[uint64]order{odInputs[1].ID: odInputs[1]})
+
+		r2, err := k.Query(p, q2)
+		cmpResult(r2, err, map[uint64]order{odInputs[1].ID: odInputs[1]})
+		return nil
+	})
+
+	bdb.Update(func(tx *bolt.Tx) error {
+		p, _ := NewPoler(tx)
+
+		odInputs[1].Status, odInputs[0].Status = s0, s1 //swap them
+
+		fmt.Println("xxxxxxxxxxxxxxx", odInputs)
+		k.Put(p, &odInputs[0])
+		k.Put(p, &odInputs[1])
+		fmt.Println("yxxxxxxxxxxxxxxx", odInputs)
+		return nil
+	})
+
+	q2 = QueryInfo{
+		IndexName: "idx_Type_Status_District",
+		Where: map[string][]byte{
+			"Type":   []byte(odInputs[1].Type),
+			"Status": Bytes(Ptr(&s1), unsafe.Sizeof(s1)),
+			//"District": []byte(odInputs[1].District),
+		},
+	}
+
+	q3 := QueryInfo{
+		IndexName: "idx_Type_Status_District",
+		Where: map[string][]byte{
+			"Type":   []byte(odInputs[1].Type),
+			"Status": Bytes(Ptr(&s0), unsafe.Sizeof(s0)),
+			//"District": []byte(odInputs[1].District),
+		},
+	}
+	//here qi is old, so we should get odInputs[0]
+	bdb.View(func(tx *bolt.Tx) error {
+		p, _ := NewPoler(tx)
+		r, err := k.Query(p, qi)
+		cmpResult(r, err, map[uint64]order{odInputs[0].ID: odInputs[0]})
+		r, err = k.Query(p, q2)
+		cmpResult(r, err, map[uint64]order{odInputs[0].ID: odInputs[0]})
+		r, err = k.Query(p, q3)
+		cmpResult(r, err, map[uint64]order{odInputs[1].ID: odInputs[1]})
+
+		return nil
+	})
+	bdb.Update(func(tx *bolt.Tx) error {
+		p, _ := NewPoler(tx)
+		k.Delete(p, &odInputs[0])
+		return nil
+	})
+	bdb.View(func(tx *bolt.Tx) error {
+		p, _ := NewPoler(tx)
+
+		_, err := k.Get(p, &odInputs[0], nil)
+		if err.Error() != errDataNotFound {
+			t.Errorf("should not get deleted obj: %s", err)
+		}
+
+		r, err := k.Query(p, q2)
+		if len(r) != 0 {
+			t.Errorf("should not get deleted obj")
+		}
+		r, err = k.Query(p, q3)
+		cmpResult(r, err, map[uint64]order{odInputs[1].ID: odInputs[1]})
+
+		return nil
+	})
+}
+
 func Test_queryEqual(t *testing.T) {
 
 	// generater value

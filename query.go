@@ -237,7 +237,7 @@ func (kvt *KVT) Get(db Poler, obj KVer, dst KVer) (KVer, error) {
 	key, _ := obj.Key()
 	oldByte, err := db.Get(kvt.path, key)
 
-	if err == nil || len(oldByte) == 0 {
+	if err != nil || len(oldByte) == 0 {
 		return dst, fmt.Errorf(errDataNotFound)
 	}
 	return kvt.unmarshal(oldByte, dst)

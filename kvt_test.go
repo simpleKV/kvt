@@ -17,6 +17,20 @@ type order struct {
 	Num      int
 }
 
+// generater value
+func orderUnmarshal(b []byte, obj KVer) (KVer, error) {
+	r := bytes.NewReader(b)
+	dec := gob.NewDecoder(r)
+	var test *order
+	if obj != nil {
+		test = obj.(*order)
+	} else {
+		test = new(order)
+	}
+	dec.Decode(test)
+	return test, nil
+}
+
 func (obj *order) Key() ([]byte, error) {
 	return Bytes(Ptr(&obj.ID), unsafe.Sizeof(obj.ID)), nil
 }
@@ -36,6 +50,8 @@ func (this *order) Index(name string) ([]byte, error) {
 	switch name {
 	case "idx_Type_Status_District":
 		return this.idx_Type_Status_District()
+	case "idx_Status":
+		return this.idx_Status()
 	}
 	return nil, fmt.Errorf("Index not found")
 }
@@ -45,6 +61,12 @@ func (this *order) idx_Type_Status_District() ([]byte, error) {
 		[]byte(this.Type),
 		Bytes(Ptr(&this.Status), unsafe.Sizeof(this.Status)),
 		[]byte(this.District)) //every index should append primary key at end
+	return key, nil
+}
+
+func (this *order) idx_Status() ([]byte, error) {
+	key := MakeIndexKey(make([]byte, 0, 20),
+		Bytes(Ptr(&this.Status), unsafe.Sizeof(this.Status))) //every index should append primary key at end
 	return key, nil
 }
 
