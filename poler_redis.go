@@ -12,6 +12,7 @@ import (
 )
 
 const errRedisNil = "redis: nil"
+const sequenceName = "sequence"
 
 type redisdb struct {
 	rdb  *redis.Client
@@ -86,7 +87,7 @@ func (this *redisdb) Query(path string, prefix []byte, filter FilterFunc) (resul
 			panic(err)
 		}
 		for i := 0; i < len(keys); i += 2 {
-			if filter([]byte(keys[i])) {
+			if filter([]byte(keys[i])) && keys[i] != sequenceName {
 				result = append(result, KVPair{Key: []byte(keys[i]), Value: []byte(keys[i+1])})
 			}
 		}
@@ -100,7 +101,7 @@ func (this *redisdb) Query(path string, prefix []byte, filter FilterFunc) (resul
 
 func (this *redisdb) Sequence(path string) (seq uint64, err error) {
 
-	scmd := this.rdb.HGet(this.ctx, path, "sequence")
+	scmd := this.rdb.HGet(this.ctx, path, sequenceName)
 	s, err := scmd.Bytes()
 
 	p := (*uint64)(Ptr((&s[0])))
@@ -108,13 +109,13 @@ func (this *redisdb) Sequence(path string) (seq uint64, err error) {
 }
 
 func (this *redisdb) NextSequence(path string) (seq uint64, err error) {
-	icmd := this.rdb.HIncrBy(this.ctx, path, "sequence", 1)
+	icmd := this.rdb.HIncrBy(this.ctx, path, sequenceName, 1)
 	ret, err := icmd.Result()
 	return uint64(ret), err
 }
 
 func (this *redisdb) SetSequence(path string, seq uint64) (err error) {
-	icmd := this.rdb.HSet(this.ctx, path, "sequence", seq)
+	icmd := this.rdb.HSet(this.ctx, path, sequenceName, seq)
 	_, err = icmd.Result()
 	return err
 }
