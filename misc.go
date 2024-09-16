@@ -9,6 +9,7 @@ import (
 
 type Ptr = unsafe.Pointer
 type Size_t = uintptr
+type Action func() error
 
 func Bytes(s Ptr, size Size_t) []byte {
 	p := (*[1<<31 - 1]byte)(s)
@@ -124,4 +125,13 @@ func basename(str string) string {
 	default:
 		return str[i+1:]
 	}
+}
+
+func Dos(actions []Action) error {
+	for i := range actions {
+		if err := actions[i](); err != nil {
+			return err
+		}
+	}
+	return nil
 }

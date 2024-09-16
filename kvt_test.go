@@ -27,8 +27,11 @@ func orderUnmarshal(b []byte, obj KVer) (KVer, error) {
 	} else {
 		test = new(order)
 	}
-	dec.Decode(test)
-	return test, nil
+	err := dec.Decode(test)
+	if err != nil {
+		fmt.Println("orderUnmarshal err: ", err)
+	}
+	return test, err
 }
 
 func (obj *order) Key() ([]byte, error) {

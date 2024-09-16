@@ -18,17 +18,6 @@ import (
 	"github.com/tidwall/buntdb"
 )
 
-type Action func() error
-
-func Dos(actions []Action) error {
-	for i := range actions {
-		if err := actions[i](); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func Test_createDeleteBucket(t *testing.T) {
 	os.Remove("query_test.bdb")
 	bdb, err := buntdb.Open("query_test.bdb")

@@ -12,7 +12,7 @@ import (
 )
 
 const errRedisNil = "redis: nil"
-const sequenceName = "sequence"
+const sequenceName = "_sequence_"
 
 type redisdb struct {
 	rdb  *redis.Client
