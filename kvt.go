@@ -7,8 +7,6 @@ import (
 	"strings"
 )
 
-type IndexFunc = func(any) ([]byte, error)
-type EncodeFunc = func(any) ([]byte, error)
 type DecodeFunc = func([]byte, KVer) (KVer, error)
 type CompareFunc = func(d, v []byte) bool
 type FilterFunc = func(k []byte) bool
