@@ -120,7 +120,7 @@ func (this *bunt) Query(path string, prefix []byte, filter FilterFunc) (result [
 
 func (this *bunt) Sequence(path string) (seq uint64, err error) {
 
-	v, err := this.get(path, []byte("sequence"), defaultPathJoiner)
+	v, err := this.get(path, []byte(sequenceName), defaultPathJoiner)
 	if err != nil {
 		return 0, err
 	}
@@ -140,5 +140,5 @@ func (this *bunt) NextSequence(path string) (seq uint64, err error) {
 }
 
 func (this *bunt) SetSequence(path string, seq uint64) (err error) {
-	return this.put(path, []byte("sequence"), Bytes(Ptr(&seq), unsafe.Sizeof(seq)), defaultPathJoiner)
+	return this.put(path, []byte(sequenceName), Bytes(Ptr(&seq), unsafe.Sizeof(seq)), defaultPathJoiner)
 }

@@ -22,6 +22,7 @@ const defaultPathJoiner = '/'
 const defaultIDXJoiner = '_'
 const defaultKeyJoiner = ':' //field1:field2,  escape ':' with "`"
 const defaultKeyEscaper = '`'
+const sequenceName = "__sequence__"
 
 // invalid index format, maybe contain invalid charactor,  should like that IDX(field1_field2_...)
 const errFormatInvalid = "index format invalid: [%s]"

@@ -37,7 +37,7 @@ func Test_createDeleteBucket(t *testing.T) {
 			}
 			name, _, _ := splitPath(bkt)
 			if !strings.HasPrefix(name, IDXPrefix) {
-				_, err := tx.Get(bkt + "/sequence")
+				_, err := tx.Get(bkt + string(defaultPathJoiner) + sequenceName)
 				if err == buntdb.ErrNotFound {
 					t.Errorf("create bkt[%s] without seq: %s", bkt, err)
 					return fmt.Errorf("crt bkt without seq")
@@ -48,7 +48,7 @@ func Test_createDeleteBucket(t *testing.T) {
 					return fmt.Errorf("crt bkt without seq")
 				}
 			} else {
-				_, err := tx.Get(bkt + "/sequence")
+				_, err := tx.Get(bkt + string(defaultPathJoiner) + sequenceName)
 				if err != buntdb.ErrNotFound {
 					t.Errorf("create idx bkt[%s] with seq: %s", bkt, err)
 					return fmt.Errorf("crt idx bkt with seq")
@@ -120,7 +120,7 @@ func Test_createDeleteBucket(t *testing.T) {
 			t.Errorf("delete bkt fail [%s]", err)
 		}
 
-		_, err = tx.Get("abc/sequence")
+		_, err = tx.Get("abc" + string(defaultPathJoiner) + sequenceName)
 		if err == buntdb.ErrNotFound {
 			t.Errorf("delete idx bkt fail, lost seq")
 		}
@@ -134,7 +134,7 @@ func Test_createDeleteBucket(t *testing.T) {
 		}
 
 		//sequence should deleted
-		_, err = tx.Get("abc/sequence")
+		_, err = tx.Get("abc" + string(defaultPathJoiner) + sequenceName)
 		if err == nil || err != buntdb.ErrNotFound {
 			t.Errorf("delete idx bkt fail, lost seq")
 		}
