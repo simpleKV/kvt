@@ -24,20 +24,13 @@ const defaultKeyJoiner = ':' //field1:field2,  escape ':' with "`"
 const defaultKeyEscaper = '`'
 const sequenceName = "__sequence__"
 
-// invalid index format, maybe contain invalid charactor,  should like that IDX(field1_field2_...)
-const errFormatInvalid = "index format invalid: [%s]"
+const errIndexNameInvalid = "index name invalid: [%s], should like as /path/to/idx_Name"
 
 // current index has defined before, or repeat index
-const errIndexConflict = "index name conflict: [%s], primary key should be unique"
+const errIndexConflict = "index name conflict: [%s], index name should be unique"
 
 // register index failed
 const errIndexFieldMismatch = "index field match failed: [%s], please confirm index field exists"
-
-// index doesn't exist
-const errIndexNotExist = "index not found or doesn't exist: [%s]"
-
-// index key generator not found
-//const errIndexFuncNotFound = "index [%s] not found generate key function"
 
 const errBucketOpenFailed = "bucket [%s] not found or open failed"
 
@@ -45,9 +38,9 @@ const errCompareOperatorInvalid = "compare operator [%s] is invalid"
 
 const errNewPolerFailed = "new poler failed, invalid db handler"
 
-const errIndexFunctionNotFound = "index function not found"
-
-const errDataNotFound = "data not found"
+// next 2 errors is common, export to users
+const ErrIndexNotFound = "index not found: [%s]"
+const ErrDataNotFound = "data not found"
 
 type KVer interface {
 	Key() ([]byte, error)
@@ -102,7 +95,7 @@ func splitPath(fullPath string) (string, []string, error) {
 	names := strings.Split(name, string(defaultPathJoiner))
 	switch len(names) {
 	case 0:
-		return "", []string{}, fmt.Errorf(errFormatInvalid, fullPath)
+		return "", []string{}, fmt.Errorf(errIndexNameInvalid, fullPath)
 	case 1:
 		return names[0], []string{}, nil
 	default:

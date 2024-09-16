@@ -106,18 +106,18 @@ func (kvt *KVT) getIndexInfo(name string) (index *IndexInfo, err error) {
 	case strings.HasPrefix(name, IDXPrefix):
 		v, ok := kvt.indexs[name]
 		if !ok {
-			return nil, fmt.Errorf(errIndexNotExist, name)
+			return nil, fmt.Errorf(ErrIndexNotFound, name)
 		}
 		return v, nil
 	case strings.HasPrefix(name, MIDXPrefix):
 		v, ok := kvt.mindexs[name]
 		if !ok {
-			return nil, fmt.Errorf(errIndexNotExist, name)
+			return nil, fmt.Errorf(ErrIndexNotFound, name)
 		}
 		return v.IndexInfo, nil
 		//case strings.HasPrefix(name, PKPrefix): //how about query with pk ??
 	}
-	return nil, fmt.Errorf(errIndexNotExist, name)
+	return nil, fmt.Errorf(ErrIndexNotFound, name)
 }
 
 // query by index, and support fields range query
@@ -125,7 +125,7 @@ func (kvt *KVT) RangeQuery(db Poler, rangeInfo RangeInfo) (result []any, err err
 
 	index, err := kvt.getIndexInfo(rangeInfo.IndexName)
 	if err != nil || index == nil {
-		return nil, fmt.Errorf(errIndexNotExist, rangeInfo.IndexName)
+		return nil, fmt.Errorf(ErrIndexNotFound, rangeInfo.IndexName)
 	}
 
 	//save all the equal query field with it's byte[] value
@@ -238,7 +238,7 @@ func (kvt *KVT) Get(db Poler, obj KVer, dst KVer) (KVer, error) {
 	oldByte, err := db.Get(kvt.path, key)
 
 	if err != nil || len(oldByte) == 0 {
-		return dst, fmt.Errorf(errDataNotFound)
+		return nil, fmt.Errorf(ErrDataNotFound)
 	}
 	return kvt.unmarshal(oldByte, dst)
 }

@@ -243,7 +243,7 @@ func Test_crud(t *testing.T) {
 		p, _ := NewPoler(tx)
 
 		_, err := k.Get(p, &odInputs[0], nil)
-		if err.Error() != errDataNotFound {
+		if err.Error() != ErrDataNotFound {
 			t.Errorf("should not get deleted obj: %s", err)
 		}
 

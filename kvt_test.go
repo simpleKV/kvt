@@ -54,7 +54,7 @@ func (this *order) Index(name string) ([]byte, error) {
 	case "idx_Status":
 		return this.idx_Status()
 	}
-	return nil, fmt.Errorf("Index not found")
+	return nil, fmt.Errorf(ErrIndexNotFound, name)
 }
 
 func (this *order) idx_Type_Status_District() ([]byte, error) {
